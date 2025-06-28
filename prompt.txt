@@ -1,0 +1,339 @@
+# Claude Code Prompt: DeepSeek R1 Fine-tuning System with DWSIM Integration
+
+Create a comprehensive system that fine-tunes DeepSeek R1 for text-to-diagram and text-to-simulation tasks using DWSIM, with reinforcement learning from simulation results and RLHF capabilities.
+
+## Core Requirements
+
+### 1. System Architecture
+- **Main Application**: Python-based system with modular architecture
+- **GUI Framework**: Use Tkinter or PyQt6 for cross-platform compatibility
+- **ML Framework**: Use transformers, torch, and trl for model fine-tuning
+- **Compute Backend**: Thunder Compute integration for distributed training
+- **Database**: SQLite for storing training data, feedback, and simulation results
+- **API Layer**: FastAPI for model serving and DWSIM communication
+
+### 2. DeepSeek R1 Fine-tuning Module
+```
+Components needed:
+- Model loading and configuration for DeepSeek R1
+- Custom dataset preparation for text-to-diagram/simulation tasks
+- LoRA/QLoRA fine-tuning implementation
+- Reinforcement learning pipeline with PPO/DPO
+- Training monitoring and logging
+- Model versioning and checkpointing
+```
+
+### 3. DWSIM Python Integration Layer
+```
+Requirements:
+- DWSIM Python API integration using pythonnet
+- Direct simulation object creation and manipulation
+- Automatic flowsheet generation from text descriptions
+- Unit operations configuration and connection
+- Stream property calculations and validation
+- Results extraction and analysis
+- Error handling for simulation convergence issues
+- Cross-platform compatibility (Windows/Linux)
+```
+
+### 4. GUI Application Structure
+```
+Main Window Components:
+1. Text Input Panel
+   - Natural language description input
+   - Template selection dropdown
+   - Process type categorization
+
+2. Model Interaction Panel
+   - Model selection (base vs fine-tuned versions)
+   - Generation parameters (temperature, top_p, etc.)
+   - Real-time generation progress
+
+3. Diagram/Simulation Output Panel
+   - Generated DWSIM file preview
+   - Process flow diagram visualization
+   - Simulation results display
+   - Parameter tables
+
+4. Feedback System Panel
+   - Rating system (1-5 stars)
+   - Detailed feedback text input
+   - Correction suggestions
+   - Submit feedback button
+
+5. Training Dashboard Panel
+   - Training progress monitoring
+   - Loss curves and metrics
+   - Model performance statistics
+   - Fine-tuning controls
+```
+
+### 5. Reinforcement Learning Pipeline
+```
+RL Components:
+- Reward model based on DWSIM simulation success/failure
+- Simulation accuracy scoring system
+- Process feasibility validation
+- Energy balance checking
+- Mass balance verification
+- Economic optimization metrics
+- User feedback integration into reward function
+```
+
+### 6. Data Management System
+```
+Database Schema:
+- user_inputs (text descriptions, timestamps)
+- generated_outputs (DWSIM files, diagrams)
+- simulation_results (success/failure, metrics, errors)
+- user_feedback (ratings, comments, corrections)
+- training_sessions (parameters, metrics, checkpoints)
+- model_versions (paths, performance, deployment status)
+```
+
+## Technical Implementation Details
+
+### 7. Fine-tuning Configuration
+```python
+# Specify these training parameters:
+- Base model: DeepSeek R1 (latest version)
+- Fine-tuning method: QLoRA with 4-bit quantization
+- Target modules: all linear layers
+- Rank: 64, Alpha: 128
+- Learning rate: 2e-4 with cosine scheduler
+- Batch size: 4 (gradient accumulation: 8)
+- Max sequence length: 4096 tokens
+- RL algorithm: PPO with KL penalty
+```
+
+### 8. DWSIM Process Types to Support
+```
+Chemical Processes:
+- Distillation columns
+- Heat exchangers
+- Reactors (CSTR, PFR, batch)
+- Separators and flash tanks
+- Pumps and compressors
+- Mixers and splitters
+- Pressure vessels
+- Cooling towers
+- Absorption/stripping columns
+```
+
+### 9. Training Data Generation
+```
+Create synthetic training data:
+- Process descriptions in natural language
+- Corresponding DWSIM simulation files
+- Validation through actual DWSIM runs
+- Error cases and failure modes
+- User correction examples
+- Multi-language support (technical terminology)
+```
+
+### 10. Thunder Compute Integration
+```
+Distributed Training Setup:
+- Multi-GPU training configuration
+- Gradient synchronization
+- Model parallelism for large models
+- Checkpointing and fault tolerance
+- Resource monitoring and management
+- Cost optimization strategies
+```
+
+## File Structure and Organization
+
+### 11. Project Directory Structure
+```
+DeepSIM/
+├── src/
+│   ├── models/
+│   │   ├── deepseek_wrapper.py
+│   │   ├── fine_tuning.py
+│   │   └── rl_trainer.py
+│   ├── dwsim_integration/
+│   │   ├── python_interface.py
+│   │   ├── flowsheet_builder.py
+│   │   ├── unit_operations.py
+│   │   ├── stream_manager.py
+│   │   ├── simulation_runner.py
+│   │   └── results_parser.py
+│   ├── gui/
+│   │   ├── main_window.py
+│   │   ├── panels/
+│   │   └── utils.py
+│   ├── data/
+│   │   ├── database.py
+│   │   ├── preprocessing.py
+│   │   └── dataset_builder.py
+│   └── api/
+│       ├── server.py
+│       └── endpoints.py
+├── config/
+│   ├── model_config.yaml
+│   ├── training_config.yaml
+│   └── dwsim_config.yaml
+├── data/
+│   ├── training_samples/
+│   ├── user_feedback/
+│   └── simulation_results/
+├── models/
+│   ├── checkpoints/
+│   └── deployed/
+├── requirements.txt
+├── setup.py
+└── README.md
+```
+
+## Implementation Instructions
+
+### 12. Development Steps
+1. **Environment Setup**
+   - Install Python 3.9+, CUDA toolkit, PyTorch
+   - Set up virtual environment with all dependencies
+   - Install DWSIM and configure pythonnet
+   - Configure Thunder Compute credentials and access
+
+2. **Core Model Implementation**
+   - Load DeepSeek R1 with appropriate tokenizer
+   - Implement custom dataset classes for training
+   - Create fine-tuning pipeline with LoRA
+   - Set up reinforcement learning trainer
+
+3. **DWSIM Python Integration**
+   - Install DWSIM and pythonnet package
+   - Set up DWSIM Python API connection
+   - Create flowsheet building utilities
+   - Implement unit operation templates
+
+4. **GUI Development**
+   - Design responsive interface layout
+   - Implement real-time model interaction
+   - Add progress indicators and error handling
+   - Create feedback collection system
+
+5. **Training Pipeline**
+   - Implement reward function based on simulation success
+   - Add user feedback integration
+   - Create training monitoring dashboard
+   - Set up model versioning system
+
+6. **Testing and Validation**
+   - Unit tests for all components
+   - Integration tests with DWSIM
+   - Performance benchmarking
+   - User acceptance testing
+
+### 18. DWSIM Python API Implementation Details
+```python
+# Key DWSIM Python integration components:
+
+# 1. Flowsheet Creation and Management
+from DWSIM.Automation import Automation3
+from DWSIM.Interfaces.Enums import *
+
+# Initialize DWSIM automation
+interf = Automation3()
+sim = interf.CreateFlowsheet()
+
+# 2. Unit Operations Implementation
+- Distillation columns with tray/packing specifications
+- Heat exchangers (shell-tube, plate, etc.)
+- Reactors with kinetics and equilibrium
+- Separators with split fractions
+- Pumps and compressors with curves
+- Mixers and splitters with stream routing
+- Custom unit operations for specialized processes
+
+# 3. Stream Management
+- Material streams with composition tracking
+- Energy streams for heat integration
+- Property calculations using thermodynamic models
+- Stream connectivity validation
+- Flow rate and condition specifications
+
+# 4. Thermodynamic Property Packages
+- NRTL, UNIQUAC, UNIFAC models
+- Equation of state (Peng-Robinson, SRK)
+- Steam tables and specialized packages
+- Custom component databases
+- Property estimation methods
+
+# 5. Simulation Execution
+- Sequential modular solving
+- Equation-oriented solving
+- Convergence monitoring and control
+- Recycle stream handling
+- Initialization strategies
+
+# 6. Results Processing
+- Stream table generation
+- Equipment performance metrics
+- Economic calculations
+- Environmental impact assessment
+- Sensitivity analysis automation
+```
+```
+Handle these scenarios:
+- DWSIM connection failures
+- Invalid process descriptions
+- Simulation convergence issues
+- Model generation errors
+- Thunder Compute connectivity problems
+- Database corruption or conflicts
+- GUI responsiveness during long operations
+```
+
+### 13. Error Handling and Edge Cases
+```
+Optimization strategies:
+- Model quantization for inference
+- Batch processing for multiple simulations
+- Caching for repeated operations
+- Async operations for GUI responsiveness
+- Memory management for large models
+- GPU memory optimization
+```
+
+### 15. Security and Privacy
+```
+Security measures:
+- Input sanitization for all user inputs
+- Secure API endpoints with authentication
+- Data encryption for sensitive information
+- User data privacy compliance
+- Model weights protection
+- Audit logging for all operations
+```
+
+## Deliverables
+
+Create a fully functional system with:
+- Complete source code with documentation
+- Installation and setup scripts
+- User manual and API documentation
+- Training data samples and templates
+- Pre-configured model checkpoints
+- Docker containers for easy deployment
+- Comprehensive test suite
+- Performance benchmarking results
+
+## Additional Considerations
+
+### 16. Scalability Planning
+- Support for multiple concurrent users
+- Distributed inference serving
+- Model serving with load balancing
+- Database sharding for large datasets
+- Horizontal scaling capabilities
+
+### 17. Monitoring and Logging
+- Comprehensive logging throughout the system
+- Performance metrics collection
+- User interaction analytics
+- Model performance tracking
+- System health monitoring
+- Automated alerting for failures
+
+This system should provide a seamless workflow from natural language process descriptions to validated DWSIM simulations, with continuous improvement through reinforcement learning and user feedback.

@@ -1,0 +1,130 @@
+# environment.yml
+name: deepsim
+  - pytorch
+  - nvidia
+  - huggingface
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python version
+  - python=3.10
+  
+  # Deep Learning Framework
+  - pytorch=2.1.0
+  - pytorch-cuda=11.8
+  - torchvision
+  - torchaudio
+  
+  # Transformers & Fine-tuning
+  - transformers=4.36.0
+  - datasets=2.16.0
+  - accelerate=0.25.0
+  - peft=0.7.0  # For LoRA/QLoRA
+  - bitsandbytes=0.41.0  # For 4-bit quantization
+  - sentencepiece=0.1.99
+  - tokenizers=0.15.0
+  
+  # DWSIM Integration
+  - pythonnet=3.0.3  # For .NET interop with DWSIM
+  
+  # Reinforcement Learning
+  - gymnasium=0.29.1
+  - stable-baselines3=2.2.1
+  - shimmy=1.3.0
+  
+  # Scientific Computing
+  - numpy=1.24.3
+  - scipy=1.11.4
+  - pandas=2.1.4
+  - scikit-learn=1.3.2
+  
+  # Optimization
+  - optuna=3.5.0  # Hyperparameter tuning
+  - ray-tune=2.9.0
+  
+  # Monitoring & Visualization
+  - tensorboard=2.15.1
+  - wandb=0.16.1
+  - matplotlib=3.8.2
+  - seaborn=0.13.0
+  - plotly=5.18.0
+  
+  # Development Tools
+  - ipykernel=6.28.0
+  - jupyter=1.0.0
+  - jupyterlab=4.0.9
+  - ipywidgets=8.1.1
+  
+  # Code Quality
+  - black=23.12.1
+  - pylint=3.0.3
+  - mypy=1.8.0
+  
+  # Testing
+  - pytest=7.4.3
+  - pytest-cov=4.1.0
+  - pytest-asyncio=0.21.1
+  
+  # Utilities
+  - tqdm=4.66.1
+  - rich=13.7.0
+  - click=8.1.7
+  - pyyaml=6.0.1
+  - python-dotenv=1.0.0
+  
+  # API & Web
+  - fastapi=0.108.0
+  - uvicorn=0.25.0
+  - httpx=0.26.0
+  
+  # Data Processing
+  - pyarrow=14.0.2
+  - dask=2023.12.1
+  - h5py=3.10.0
+  
+  # Documentation
+  - mkdocs=1.5.3
+  - mkdocs-material=9.5.3
+  
+  # Pip dependencies (not in conda)
+  - pip
+  - pip:
+    # DeepSeek specific
+    - flash-attn==2.3.6  # Faster attention
+    - xformers==0.0.23  # Memory efficient transformers
+    
+    # DWSIM specific
+    - dwsimopt==0.2.0  # DWSIM optimization library
+    
+    # Thunder Compute
+    - thunder-client==0.2.0  # Thunder Compute Python client
+    
+    # Additional ML tools
+    - evaluate==0.4.1  # Model evaluation
+    - rouge-score==0.1.2
+    - sacrebleu==2.4.0
+    
+    # Code generation metrics
+    - tree-sitter==0.20.4
+    - tree-sitter-python==0.20.4
+    
+    # Process control
+    - control==0.9.4  # Control systems library
+    - slycot==0.5.4  # For control computations
+    
+    # Chemical Engineering
+    - thermo==0.2.28  # Thermodynamic properties
+    - fluids==1.0.25  # Fluid dynamics
+    - chemicals==1.1.5  # Chemical properties
+    - pint==0.23  # Unit conversions
+
+# Environment variables
+variables:
+  CUDA_HOME: /usr/local/cuda-11.8
+  TORCH_CUDA_ARCH_LIST: "7.0;7.5;8.0;8.6;8.9;9.0"  # Support various GPUs
+  TOKENIZERS_PARALLELISM: "false"
+  TRANSFORMERS_CACHE: "/data/cache/transformers"
+  HF_HOME: "/data/cache/huggingface"
+  DWSIM_PATH: "/opt/dwsim"
+  PYTHONPATH: "${PYTHONPATH}:/opt/dwsim/python"
