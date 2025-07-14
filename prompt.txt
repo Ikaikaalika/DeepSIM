@@ -2,7 +2,7 @@
 
 Create a comprehensive system that fine-tunes DeepSeek R1 for text-to-diagram and text-to-simulation tasks using DWSIM, with reinforcement learning from simulation results and RLHF capabilities.
 
-## Core Requirements
+## Core Requirements 
 
 ### 1. System Architecture
 - **Main Application**: Python-based system with modular architecture
