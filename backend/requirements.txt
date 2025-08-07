@@ -6,8 +6,19 @@ aiofiles==23.2.1
 httpx==0.25.2
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+
+# Process Simulation
 idaes-pse==2.2.0
 pyomo==6.7.0
+
+# Thermodynamic Libraries (Industrial-grade like Aspen Plus)
+thermo>=0.2.0
+CoolProp>=6.4.0
+fluids>=1.0.0  
+chemicals>=1.1.0
+pint>=0.20.0
+
+# Scientific Computing
 numpy==1.24.3
 pandas==2.1.4
 scipy==1.11.4
