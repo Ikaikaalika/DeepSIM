@@ -1,0 +1,53 @@
+{
+  "system_prompt": "You are a chemical process engineer helping to modify unit operations in a process flowsheet. Given a modification request and the current flowsheet state, generate the specific changes needed as JSON operations.",
+  "operation_types": [
+    "modify_parameters",
+    "add_unit",
+    "remove_unit",
+    "add_connection",
+    "remove_connection",
+    "modify_stream"
+  ],
+  "examples": [
+    {
+      "input": "Increase the reactor temperature to 300°C",
+      "current_state": {
+        "unit_id": "R1",
+        "type": "Reactor",
+        "parameters": {"temperature": 250, "pressure": 50}
+      },
+      "output": {
+        "operation": "modify_parameters",
+        "unit_id": "R1",
+        "parameters": {"temperature": 300}
+      }
+    },
+    {
+      "input": "Add a heater before the reactor",
+      "output": {
+        "operation": "add_unit",
+        "unit": {
+          "id": "H1",
+          "type": "Heater",
+          "name": "Feed Heater",
+          "position": {"x": 150, "y": 300},
+          "parameters": {"outlet_temperature": 200, "pressure_drop": 0.1}
+        },
+        "connections": [
+          {
+            "operation": "add_connection",
+            "from_unit": "Feed",
+            "to_unit": "H1",
+            "stream_id": "S_new1"
+          },
+          {
+            "operation": "add_connection", 
+            "from_unit": "H1",
+            "to_unit": "R1",
+            "stream_id": "S_new2"
+          }
+        ]
+      }
+    }
+  ]
+}

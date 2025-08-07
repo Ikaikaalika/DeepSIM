@@ -1,76 +1,93 @@
-# DeepSIM - DeepSeek R1 Fine-tuning System with DWSIM Integration
+# DeepSim - AI-Powered Chemical Process Simulation Platform
 
-A comprehensive system that fine-tunes DeepSeek R1 for text-to-diagram and text-to-simulation tasks using DWSIM, with reinforcement learning from simulation results and RLHF capabilities.
+DeepSim is a modern, web-based chemical process simulation platform that combines the power of traditional process simulation with AI assistance. Built as an alternative to Aspen Plus, it features a React-based GUI with React Flow for process diagrams, FastAPI backend, IDAES simulation engine, and LLM integration for intelligent process design and analysis.
 
-## Overview
+## 🌟 Features
 
-DeepSIM creates a seamless workflow from natural language process descriptions to validated DWSIM simulations, with continuous improvement through reinforcement learning and user feedback. The system combines advanced language model fine-tuning with chemical process simulation to enable engineers to describe processes in plain English and automatically generate complete simulation models.
+- **Interactive Process Design**: Drag-and-drop unit operations with visual connections
+- **AI Assistant**: Chat with DeepSeek R1 LLM to build, modify, and analyze processes
+- **Real-time Simulation**: IDAES-powered chemical process simulation engine
+- **Modern Web Interface**: React + TypeScript frontend with Tailwind CSS
+- **Export Capabilities**: Save flowsheets as JSON, CSV, or generate reports
+- **Thunder Compute Integration**: Ready for LLM inference and fine-tuning
 
-## Key Features
-
-- **DeepSeek R1 Fine-tuning**: Custom fine-tuning pipeline with QLoRA optimization
-- **DWSIM Integration**: Direct Python API integration for simulation automation  
-- **Reinforcement Learning**: PPO-based training with simulation feedback rewards
-- **GUI Application**: Cross-platform interface with real-time model interaction
-- **Thunder Compute**: Distributed training for scalable model development
-- **Feedback System**: Human-in-the-loop learning from user corrections
-
-## System Architecture
-
-### Core Components
-- **Main Application**: Python-based modular architecture
-- **GUI Framework**: Tkinter/PyQt6 for cross-platform compatibility
-- **ML Framework**: transformers, torch, and trl for model fine-tuning
-- **Compute Backend**: Thunder Compute for distributed training
-- **Database**: SQLite for training data and simulation results
-- **API Layer**: FastAPI for model serving and DWSIM communication
-
-### Supported Process Types
-- Distillation columns
-- Heat exchangers  
-- Reactors (CSTR, PFR, batch)
-- Separators and flash tanks
-- Pumps and compressors
-- Mixers and splitters
-- Cooling towers
-- Absorption/stripping columns
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
-DeepSIM/
-├── src/
-│   ├── models/              # DeepSeek R1 fine-tuning modules
-│   ├── dwsim_integration/   # DWSIM Python API interface
-│   ├── gui/                 # User interface components
-│   ├── data/                # Database and preprocessing
-│   └── api/                 # FastAPI server endpoints
-├── config/                  # Configuration files
-├── data/                    # Training and simulation data
-├── models/                  # Model checkpoints
-└── requirements.txt
+DeepSim/
+├── backend/              # FastAPI server
+│   ├── main.py          # API endpoints
+│   ├── graph_state.py   # Flowsheet state management
+│   ├── idaes_engine.py  # IDAES simulation engine
+│   └── llm_client.py    # Thunder Compute LLM integration
+├── frontend/            # React TypeScript app
+│   └── src/
+│       ├── components/  # React components
+│       ├── services/    # API client
+│       └── types/       # TypeScript types
+├── shared/              # Common schemas and prompts
+└── llm_finetune/        # LLM training scripts
 ```
 
-## Installation
+## 🚀 Quick Start
 
-1. Install Python 3.9+ and CUDA toolkit
-2. Set up virtual environment
-3. Install DWSIM and configure pythonnet
-4. Configure Thunder Compute access
-5. Install dependencies: `pip install -r requirements.txt`
+### Prerequisites
 
-## Usage
+- Python 3.10+
+- Node.js 18+
+- npm or yarn
 
-The system provides multiple interaction modes:
-- GUI application for interactive process design
-- API endpoints for programmatic access
-- Training dashboard for model fine-tuning
-- Feedback system for continuous improvement
+### Backend Setup
 
-## Fine-tuning Configuration
+1. **Install Python dependencies:**
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
 
-- **Base Model**: DeepSeek R1 (latest version)
-- **Method**: QLoRA with 4-bit quantization
-- **Training**: PPO with simulation-based rewards
-- **Architecture**: Multi-GPU distributed training
-- **Optimization**: Gradient accumulation and memory management
+2. **Start the FastAPI server:**
+   ```bash
+   python main.py
+   ```
+   The API will be available at `http://localhost:8000`
+
+### Frontend Setup
+
+1. **Install Node.js dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Start the React development server:**
+   ```bash
+   npm start
+   ```
+   The web app will be available at `http://localhost:3000`
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file in the backend directory:
+
+```env
+# Thunder Compute Configuration
+THUNDER_ENDPOINT=https://your-thunder-endpoint.com
+THUNDER_API_KEY=your-api-key
+
+# Database
+DATABASE_URL=sqlite:///database.sqlite
+
+# API Settings
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### Frontend Configuration
+
+Create a `.env` file in the frontend directory:
+
+```env
+REACT_APP_API_URL=http://localhost:8000
+```

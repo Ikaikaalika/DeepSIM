@@ -1,0 +1,306 @@
+from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exception_handlers import http_exception_handler
+from pydantic import BaseModel, validator, Field
+from typing import List, Dict, Any, Optional
+import json
+import logging
+import traceback
+from datetime import datetime
+import uuid
+
+from graph_state import GraphStateManager, FlowsheetState
+from idaes_engine import IDaESEngine
+from llm_client import LLMClient
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="DeepSim API",
+    description="AI-powered chemical process simulation platform",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global exception handlers
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    logger.error(f"Validation error: {exc}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation Error",
+            "message": str(exc),
+            "type": "validation_error"
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unexpected error: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "type": "server_error"
+        }
+    )
+
+graph_manager = GraphStateManager()
+simulation_engine = IDaESEngine()
+llm_client = LLMClient()
+
+class SimulationRequest(BaseModel):
+    flowsheet_id: str = Field(..., min_length=1, description="Valid flowsheet ID")
+    
+    @validator('flowsheet_id')
+    def validate_flowsheet_id(cls, v):
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError('Invalid flowsheet ID format')
+        return v
+
+class LLMRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000, description="Chat message")
+    flowsheet_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    
+    @validator('message')
+    def validate_message(cls, v):
+        if not v.strip():
+            raise ValueError('Message cannot be empty')
+        return v.strip()
+
+class UnitOperation(BaseModel):
+    id: str = Field(..., min_length=1)
+    type: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    position: Dict[str, float] = Field(..., description="Unit position coordinates")
+    parameters: Dict[str, Any] = {}
+    inlet_ports: List[str] = []
+    outlet_ports: List[str] = []
+    
+    @validator('type')
+    def validate_unit_type(cls, v):
+        valid_types = [
+            'Reactor', 'Heater', 'Cooler', 'Pump', 'Compressor', 'Valve',
+            'DistillationColumn', 'Mixer', 'Splitter', 'Flash', 'HeatExchanger'
+        ]
+        if v not in valid_types:
+            raise ValueError(f'Invalid unit type: {v}. Must be one of: {valid_types}')
+        return v
+    
+    @validator('position')
+    def validate_position(cls, v):
+        if 'x' not in v or 'y' not in v:
+            raise ValueError('Position must contain x and y coordinates')
+        if not isinstance(v['x'], (int, float)) or not isinstance(v['y'], (int, float)):
+            raise ValueError('Position coordinates must be numbers')
+        return v
+
+class Stream(BaseModel):
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    temperature: Optional[float] = Field(None, ge=-273.15, description="Temperature in °C")
+    pressure: Optional[float] = Field(None, gt=0, description="Pressure in bar")
+    molar_flow: Optional[float] = Field(None, ge=0, description="Molar flow rate")
+    mass_flow: Optional[float] = Field(None, ge=0, description="Mass flow rate")
+    composition: Dict[str, float] = {}
+    properties: Dict[str, Any] = {}
+    
+    @validator('composition')
+    def validate_composition(cls, v):
+        if v and sum(v.values()) > 1.001:  # Allow small numerical errors
+            raise ValueError('Composition fractions cannot sum to more than 1.0')
+        for component, fraction in v.items():
+            if fraction < 0 or fraction > 1:
+                raise ValueError(f'Invalid composition fraction for {component}: {fraction}')
+        return v
+
+class Connection(BaseModel):
+    id: str = Field(..., min_length=1)
+    from_unit: str = Field(..., min_length=1)
+    from_port: str = Field(..., min_length=1)
+    to_unit: str = Field(..., min_length=1)
+    to_port: str = Field(..., min_length=1)
+    stream_id: str = Field(..., min_length=1)
+    
+    @validator('from_unit', 'to_unit')
+    def validate_different_units(cls, v, values):
+        if 'from_unit' in values and v == values['from_unit']:
+            raise ValueError('Connection cannot be from a unit to itself')
+        return v
+
+class FlowsheetCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=500)
+    
+    @validator('name')
+    def validate_name(cls, v):
+        return v.strip()
+
+class FlowsheetUpdate(BaseModel):
+    units: Optional[List[UnitOperation]] = None
+    streams: Optional[List[Stream]] = None
+    connections: Optional[List[Connection]] = None
+
+@app.get("/")
+async def root():
+    return {"message": "DeepSim API Server", "version": "1.0.0"}
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "graph_manager": "online",
+            "simulation_engine": "online", 
+            "llm_client": "online"
+        }
+    }
+
+@app.post("/flowsheet")
+async def create_flowsheet(request: FlowsheetCreateRequest):
+    try:
+        flowsheet_id = graph_manager.create_flowsheet(request.name, request.description)
+        return {"flowsheet_id": flowsheet_id, "message": "Flowsheet created successfully"}
+    except Exception as e:
+        logger.error(f"Error creating flowsheet: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/flowsheet/{flowsheet_id}")
+async def get_flowsheet(flowsheet_id: str):
+    try:
+        flowsheet = graph_manager.get_flowsheet(flowsheet_id)
+        if not flowsheet:
+            raise HTTPException(status_code=404, detail="Flowsheet not found")
+        return flowsheet
+    except Exception as e:
+        logger.error(f"Error retrieving flowsheet: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/flowsheet/{flowsheet_id}")
+async def update_flowsheet(flowsheet_id: str, update: FlowsheetUpdate):
+    try:
+        success = graph_manager.update_flowsheet(flowsheet_id, update.dict())
+        if not success:
+            raise HTTPException(status_code=404, detail="Flowsheet not found")
+        return {"message": "Flowsheet updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating flowsheet: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/flowsheet/{flowsheet_id}")
+async def delete_flowsheet(flowsheet_id: str):
+    try:
+        success = graph_manager.delete_flowsheet(flowsheet_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Flowsheet not found")
+        return {"message": "Flowsheet deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting flowsheet: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/flowsheets")
+async def list_flowsheets():
+    try:
+        flowsheets = graph_manager.list_flowsheets()
+        return {"flowsheets": flowsheets}
+    except Exception as e:
+        logger.error(f"Error listing flowsheets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/simulate")
+async def run_simulation(request: SimulationRequest):
+    try:
+        flowsheet = graph_manager.get_flowsheet(request.flowsheet_id)
+        if not flowsheet:
+            raise HTTPException(status_code=404, detail="Flowsheet not found")
+        
+        results = await simulation_engine.simulate(flowsheet)
+        
+        graph_manager.update_simulation_results(request.flowsheet_id, results)
+        
+        return {
+            "simulation_id": results.get("simulation_id"),
+            "status": results.get("status", "completed"),
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Simulation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+@app.post("/llm/chat")
+async def chat_with_llm(request: LLMRequest):
+    try:
+        flowsheet = None
+        if request.flowsheet_id:
+            flowsheet = graph_manager.get_flowsheet(request.flowsheet_id)
+        
+        response = await llm_client.process_message(
+            message=request.message,
+            flowsheet=flowsheet,
+            context=request.context
+        )
+        
+        if response.get("action") == "update_flowsheet" and request.flowsheet_id:
+            update_data = response.get("flowsheet_update", {})
+            graph_manager.update_flowsheet(request.flowsheet_id, update_data)
+        
+        return response
+    except Exception as e:
+        logger.error(f"LLM processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM processing failed: {str(e)}")
+
+@app.post("/export/{flowsheet_id}")
+async def export_flowsheet(flowsheet_id: str, format: str = "json"):
+    try:
+        flowsheet = graph_manager.get_flowsheet(flowsheet_id)
+        if not flowsheet:
+            raise HTTPException(status_code=404, detail="Flowsheet not found")
+        
+        if format.lower() == "json":
+            return JSONResponse(content=flowsheet)
+        elif format.lower() == "csv":
+            csv_data = graph_manager.export_to_csv(flowsheet)
+            return {"format": "csv", "data": csv_data}
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+            
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/units/types")
+async def get_unit_types():
+    return {
+        "unit_types": [
+            {"type": "Reactor", "description": "Chemical reactor for conversions"},
+            {"type": "Heater", "description": "Heat exchanger for heating streams"},
+            {"type": "Cooler", "description": "Heat exchanger for cooling streams"},
+            {"type": "Pump", "description": "Pump for liquid pressure increase"},
+            {"type": "Compressor", "description": "Compressor for gas pressure increase"},
+            {"type": "Valve", "description": "Pressure reduction valve"},
+            {"type": "DistillationColumn", "description": "Separation by distillation"},
+            {"type": "Mixer", "description": "Stream mixing unit"},
+            {"type": "Splitter", "description": "Stream splitting unit"},
+            {"type": "Flash", "description": "Flash separation vessel"},
+            {"type": "HeatExchanger", "description": "Heat transfer between streams"}
+        ]
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

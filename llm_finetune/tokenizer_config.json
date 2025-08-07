@@ -1,0 +1,28 @@
+{
+  "add_prefix_space": false,
+  "added_tokens_decoder": {
+    "100000": {
+      "content": "<|endoftext|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    }
+  },
+  "additional_special_tokens": [],
+  "bos_token": null,
+  "chat_template": "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system\nYou are a helpful assistant for chemical process simulation and design.<|im_end|>\n' }}{% endif %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}",
+  "clean_up_tokenization_spaces": true,
+  "do_lower_case": false,
+  "eos_token": "<|endoftext|>",
+  "errors": "replace",
+  "model_max_length": 4096,
+  "pad_token": "<|endoftext|>",
+  "padding_side": "left",
+  "processor_class": "DeepSeekProcessor",
+  "tokenizer_class": "DeepSeekTokenizer",
+  "truncation_side": "right",
+  "unk_token": null,
+  "use_default_system_prompt": false
+}

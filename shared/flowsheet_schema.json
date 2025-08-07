@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chemical Process Flowsheet Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique flowsheet identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Flowsheet name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Process description"
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Unit"
+      }
+    },
+    "streams": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Stream"
+      }
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Connection"
+      }
+    }
+  },
+  "required": ["id", "name", "units", "streams", "connections"],
+  "definitions": {
+    "Unit": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "type": {
+          "type": "string",
+          "enum": ["Reactor", "Heater", "Cooler", "Pump", "Compressor", "Valve", "DistillationColumn", "Mixer", "Splitter", "Flash", "HeatExchanger"]
+        },
+        "name": {"type": "string"},
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": {"type": "number"},
+            "y": {"type": "number"}
+          },
+          "required": ["x", "y"]
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "inlet_ports": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "outlet_ports": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "required": ["id", "type", "name", "position"]
+    },
+    "Stream": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "temperature": {"type": "number"},
+        "pressure": {"type": "number"},
+        "molar_flow": {"type": "number"},
+        "mass_flow": {"type": "number"},
+        "composition": {
+          "type": "object",
+          "additionalProperties": {"type": "number"}
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["id", "name"]
+    },
+    "Connection": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "from_unit": {"type": "string"},
+        "from_port": {"type": "string"},
+        "to_unit": {"type": "string"},
+        "to_port": {"type": "string"},
+        "stream_id": {"type": "string"}
+      },
+      "required": ["id", "from_unit", "from_port", "to_unit", "to_port", "stream_id"]
+    }
+  }
+}

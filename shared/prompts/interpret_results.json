@@ -1,0 +1,42 @@
+{
+  "system_prompt": "You are an expert chemical process engineer analyzing simulation results. Provide clear explanations of process performance, identify issues, and suggest improvements based on the simulation data.",
+  "analysis_categories": [
+    "performance_metrics",
+    "material_balance",
+    "energy_balance", 
+    "thermodynamic_feasibility",
+    "process_optimization",
+    "troubleshooting"
+  ],
+  "examples": [
+    {
+      "input": {
+        "question": "Why is the methanol purity only 85%?",
+        "simulation_results": {
+          "distillation_column": {
+            "id": "T1",
+            "distillate_composition": {"methanol": 0.85, "water": 0.15},
+            "stages": 10,
+            "reflux_ratio": 1.5,
+            "reboiler_duty": 1000
+          }
+        }
+      },
+      "output": {
+        "analysis": "The methanol purity of 85% indicates insufficient separation in the distillation column. This is likely due to the low number of theoretical stages (10) and low reflux ratio (1.5).",
+        "issues": [
+          "Insufficient theoretical stages for complete separation",
+          "Low reflux ratio limiting separation efficiency",
+          "Possible azeotrope formation with water"
+        ],
+        "recommendations": [
+          "Increase number of stages to 20-25",
+          "Increase reflux ratio to 2.5-3.0",
+          "Consider pressure swing distillation if azeotrope is limiting",
+          "Add side draw or multiple columns for better separation"
+        ],
+        "expected_improvement": "These changes should increase methanol purity to >95%"
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "system_prompt": "You are an expert chemical process engineer. Convert natural language descriptions into structured JSON flowsheet representations following the provided schema. Focus on creating realistic chemical processes with proper unit operations, stream connections, and process parameters.",
+  "examples": [
+    {
+      "input": "Create a simple methanol production process with a reactor and distillation column",
+      "output": {
+        "id": "methanol_process_1",
+        "name": "Methanol Production Process",
+        "description": "Simple methanol synthesis from syngas with purification",
+        "units": [
+          {
+            "id": "R1",
+            "type": "Reactor",
+            "name": "Methanol Reactor",
+            "position": {"x": 200, "y": 300},
+            "parameters": {
+              "temperature": 250,
+              "pressure": 50,
+              "conversion": 0.85,
+              "reactor_type": "CSTR"
+            },
+            "inlet_ports": ["in1"],
+            "outlet_ports": ["out1"]
+          },
+          {
+            "id": "T1",
+            "type": "DistillationColumn",
+            "name": "Methanol Column",
+            "position": {"x": 400, "y": 300},
+            "parameters": {
+              "stages": 20,
+              "reflux_ratio": 2.5,
+              "pressure": 1
+            },
+            "inlet_ports": ["feed"],
+            "outlet_ports": ["distillate", "bottoms"]
+          }
+        ],
+        "streams": [
+          {
+            "id": "S1",
+            "name": "Syngas Feed",
+            "temperature": 25,
+            "pressure": 50,
+            "molar_flow": 100,
+            "composition": {"CO": 0.5, "H2": 0.5}
+          },
+          {
+            "id": "S2",
+            "name": "Reactor Outlet",
+            "temperature": 250,
+            "pressure": 50
+          }
+        ],
+        "connections": [
+          {
+            "id": "C1",
+            "from_unit": "Feed",
+            "from_port": "out",
+            "to_unit": "R1",
+            "to_port": "in1",
+            "stream_id": "S1"
+          },
+          {
+            "id": "C2",
+            "from_unit": "R1",
+            "from_port": "out1",
+            "to_unit": "T1",
+            "to_port": "feed",
+            "stream_id": "S2"
+          }
+        ]
+      }
+    }
+  ]
+}
