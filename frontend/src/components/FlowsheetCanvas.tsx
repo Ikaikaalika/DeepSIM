@@ -21,9 +21,11 @@ import { Plus } from 'lucide-react';
 import { UnitOperation, UNIT_TYPES } from '../types';
 import { apiService } from '../services/api';
 import UnitNode from './UnitNode';
+import DistillationColumnNode from './DistillationColumnNode';
 
 const nodeTypes: NodeTypes = {
   unit: UnitNode,
+  distillationColumn: DistillationColumnNode,
 };
 
 interface FlowsheetCanvasProps {
@@ -119,14 +121,26 @@ const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   const addUnit = useCallback(
     (unitType: string) => {
       const id = `${unitType.toLowerCase()}_${Date.now()}`;
+      
+      // Special handling for distillation column
+      const nodeType = unitType === 'DistillationColumn' ? 'distillationColumn' : 'unit';
+      const defaultParams = unitType === 'DistillationColumn' ? {
+        stages: 20,
+        refluxRatio: 2.0,
+        feedStage: 10,
+        distillateRate: 50,
+        pressure: 101325,
+        trayEfficiency: 0.75
+      } : {};
+      
       const newNode: Node = {
         id,
-        type: 'unit',
+        type: nodeType,
         position: { x: 300, y: 300 },
         data: {
           unitType,
           name: `${unitType} ${nodes.length + 1}`,
-          parameters: {},
+          parameters: defaultParams,
         },
       };
 

@@ -13,6 +13,8 @@ import uuid
 from graph_state import GraphStateManager, FlowsheetState
 from idaes_engine import IDaESEngine
 from llm_client import LLMClient
+from unit_operations import RigorousDistillationColumn, DistillationColumnDesign
+from thermodynamics import PropertyEngine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +61,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 graph_manager = GraphStateManager()
 simulation_engine = IDaESEngine()
 llm_client = LLMClient()
+property_engine = PropertyEngine()
+distillation_designer = DistillationColumnDesign()
 
 class SimulationRequest(BaseModel):
     flowsheet_id: str = Field(..., min_length=1, description="Valid flowsheet ID")
@@ -229,7 +233,16 @@ async def run_simulation(request: SimulationRequest):
         if not flowsheet:
             raise HTTPException(status_code=404, detail="Flowsheet not found")
         
-        results = await simulation_engine.simulate(flowsheet)
+        # Check if flowsheet contains distillation columns and handle specially
+        has_distillation = any(
+            unit.get("type") == "DistillationColumn" 
+            for unit in flowsheet.get("units", [])
+        )
+        
+        if has_distillation:
+            results = await simulate_with_distillation(flowsheet)
+        else:
+            results = await simulation_engine.simulate(flowsheet)
         
         graph_manager.update_simulation_results(request.flowsheet_id, results)
         
@@ -241,6 +254,141 @@ async def run_simulation(request: SimulationRequest):
     except Exception as e:
         logger.error(f"Simulation error: {e}")
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+async def simulate_with_distillation(flowsheet: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle flowsheets with distillation columns using rigorous MESH equations"""
+    
+    try:
+        # Find distillation columns
+        distillation_units = [
+            unit for unit in flowsheet.get("units", [])
+            if unit.get("type") == "DistillationColumn"
+        ]
+        
+        all_results = {
+            "simulation_id": f"distillation_sim_{uuid.uuid4().hex[:8]}",
+            "status": "completed",
+            "timestamp": datetime.now().isoformat(),
+            "units": {},
+            "streams": {},
+            "convergence": {},
+            "distillation_results": {}
+        }
+        
+        # Process each distillation column
+        for unit in distillation_units:
+            unit_id = unit.get("id")
+            parameters = unit.get("parameters", {})
+            
+            # Extract distillation parameters
+            components = ["benzene", "toluene"]  # Default binary system
+            feed_composition = [0.5, 0.5]  # Default 50/50
+            
+            # Extract feed composition from parameters
+            feed_comps = {}
+            for key, value in parameters.items():
+                if key.startswith("feed_"):
+                    comp_name = key.replace("feed_", "")
+                    feed_comps[comp_name] = value
+            
+            if feed_comps:
+                components = list(feed_comps.keys())
+                feed_composition = list(feed_comps.values())
+                # Normalize
+                total = sum(feed_composition)
+                if total > 0:
+                    feed_composition = [x/total for x in feed_composition]
+            
+            # Create rigorous distillation column
+            distillation_column = RigorousDistillationColumn(property_engine)
+            
+            # Run distillation simulation
+            column_results = distillation_column.solve_column(
+                components=components,
+                feed_flow=100.0,  # kmol/h - default
+                feed_composition=feed_composition,
+                feed_temperature=parameters.get("feed_temperature", 373.15),  # K
+                feed_pressure=parameters.get("pressure", 101325),  # Pa
+                feed_stage=int(parameters.get("feedStage", 10)),
+                num_stages=int(parameters.get("stages", 20)),
+                reflux_ratio=float(parameters.get("refluxRatio", 2.0)),
+                distillate_rate=float(parameters.get("distillateRate", 50)),  # kmol/h
+                column_pressure=parameters.get("pressure", 101325),
+                tray_efficiency=float(parameters.get("trayEfficiency", 0.75)),
+                method="PENG-ROBINSON"
+            )
+            
+            # Add column sizing
+            if column_results.get("converged", False):
+                stage_data = column_results.get("stage_data", {})
+                if stage_data.get("vapor_flows") and stage_data.get("liquid_flows"):
+                    avg_vapor_flow = sum(stage_data["vapor_flows"]) / len(stage_data["vapor_flows"])
+                    avg_liquid_flow = sum(stage_data["liquid_flows"]) / len(stage_data["liquid_flows"])
+                    
+                    # Calculate molecular weights (simplified)
+                    mw_vapor = sum([
+                        property_engine.component_db.get_component(comp).get("molecular_weight", 100)
+                        * feed_composition[i] for i, comp in enumerate(components)
+                    ]) if len(components) == len(feed_composition) else 100
+                    
+                    mw_liquid = mw_vapor  # Simplified assumption
+                    
+                    sizing_results = distillation_designer.size_column(
+                        vapor_flow=avg_vapor_flow,
+                        liquid_flow=avg_liquid_flow,
+                        molecular_weight_v=mw_vapor,
+                        molecular_weight_l=mw_liquid,
+                        density_v=2.5,  # kg/m³ - typical for organic vapors at 1 atm
+                        density_l=700,  # kg/m³ - typical for organic liquids
+                        pressure=parameters.get("pressure", 101325),
+                        temperature=sum(stage_data.get("temperatures", [350])) / max(1, len(stage_data.get("temperatures", []))),
+                        num_stages=int(parameters.get("stages", 20))
+                    )
+                    
+                    column_results["column_sizing"] = sizing_results
+            
+            all_results["distillation_results"][unit_id] = column_results
+            
+            # Add unit results
+            all_results["units"][unit_id] = {
+                "type": "DistillationColumn",
+                "converged": column_results.get("converged", False),
+                "iterations": column_results.get("iterations", 0),
+                "distillate_rate": column_results.get("column_performance", {}).get("distillate_rate", 0),
+                "bottoms_rate": column_results.get("column_performance", {}).get("bottoms_rate", 0),
+                "reboiler_duty": column_results.get("energy_duties", {}).get("reboiler_duty", 0),
+                "condenser_duty": column_results.get("energy_duties", {}).get("condenser_duty", 0)
+            }
+        
+        # Process other units with regular simulation
+        other_units = [
+            unit for unit in flowsheet.get("units", [])
+            if unit.get("type") != "DistillationColumn"
+        ]
+        
+        if other_units:
+            # Create modified flowsheet with only non-distillation units
+            modified_flowsheet = flowsheet.copy()
+            modified_flowsheet["units"] = other_units
+            
+            # Run regular simulation on other units
+            other_results = await simulation_engine.simulate(modified_flowsheet)
+            
+            # Merge results
+            all_results["units"].update(other_results.get("units", {}))
+            all_results["streams"].update(other_results.get("streams", {}))
+            all_results["convergence"].update(other_results.get("convergence", {}))
+        
+        return all_results
+        
+    except Exception as e:
+        logger.error(f"Distillation simulation failed: {e}")
+        return {
+            "simulation_id": f"dist_error_{uuid.uuid4().hex[:8]}",
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.post("/llm/chat")
 async def chat_with_llm(request: LLMRequest):

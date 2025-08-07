@@ -136,7 +136,93 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     }
   }, [selectedNode, parameters]);
 
+  const renderDistillationColumnInputs = () => {
+    const distillationParams = [
+      { key: 'stages', label: 'Number of Stages', type: 'number', min: 5, max: 200 },
+      { key: 'refluxRatio', label: 'Reflux Ratio', type: 'number', min: 0.1, max: 50, step: 0.1 },
+      { key: 'feedStage', label: 'Feed Stage', type: 'number', min: 1, max: parameters.stages || 20 },
+      { key: 'distillateRate', label: 'Distillate Rate (kmol/h)', type: 'number', min: 0.1, step: 0.1 },
+      { key: 'pressure', label: 'Column Pressure (Pa)', type: 'number', min: 1000, step: 1000 },
+      { key: 'trayEfficiency', label: 'Tray Efficiency', type: 'number', min: 0.1, max: 1.0, step: 0.01 }
+    ];
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-purple-50 p-3 rounded-lg">
+          <h4 className="text-sm font-semibold text-purple-800 mb-2">Column Configuration</h4>
+          {distillationParams.slice(0, 3).map(param => (
+            <div key={param.key} className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {param.label}
+              </label>
+              <input
+                type="number"
+                value={parameters[param.key] || ''}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value) || 0;
+                  handleParameterChange(param.key, value);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500 text-sm"
+                min={param.min}
+                max={param.max}
+                step={param.step}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <h4 className="text-sm font-semibold text-blue-800 mb-2">Operating Conditions</h4>
+          {distillationParams.slice(3).map(param => (
+            <div key={param.key} className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {param.label}
+              </label>
+              <input
+                type="number"
+                value={parameters[param.key] || ''}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value) || 0;
+                  handleParameterChange(param.key, value);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                min={param.min}
+                max={param.max}
+                step={param.step}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-green-50 p-3 rounded-lg">
+          <h4 className="text-sm font-semibold text-green-800 mb-2">Feed Composition</h4>
+          <div className="text-sm text-green-700 mb-2">
+            Define the mole fractions of components in the feed stream
+          </div>
+          <button 
+            className="w-full px-3 py-2 text-sm text-green-700 border border-green-300 rounded-md hover:bg-green-100"
+            onClick={() => {
+              const comp = prompt('Component name (e.g., benzene, toluene):');
+              const frac = prompt('Mole fraction (0-1):');
+              if (comp && frac) {
+                const compositionKey = `feed_${comp.toLowerCase()}`;
+                handleParameterChange(compositionKey, parseFloat(frac) || 0);
+              }
+            }}
+          >
+            Add Feed Component
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderParameterInput = (key: string, value: any) => {
+    // Special handling for distillation column
+    if (selectedNode?.data.unitType === 'DistillationColumn') {
+      return null; // Handled by renderDistillationColumnInputs
+    }
+
     const inputType = typeof value === 'number' ? 'number' : 'text';
     
     return (
@@ -232,7 +318,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           )}
         </div>
         
-        {Object.keys(parameters).length > 0 ? (
+        {selectedNode?.data.unitType === 'DistillationColumn' ? (
+          renderDistillationColumnInputs()
+        ) : Object.keys(parameters).length > 0 ? (
           Object.entries(parameters).map(([key, value]) =>
             renderParameterInput(key, value)
           )
