@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSim - Industrial Process Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #f0f2f5;
+        }
+
+        /* Main application layout */
+        .app-container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        /* Top menu bar */
+        .menu-bar {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            height: 40px;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+
+        .menu-bar .logo {
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 30px;
+        }
+
+        .menu-item {
+            color: white;
+            padding: 8px 15px;
+            margin-right: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* Main content area */
+        .main-content {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 40px);
+        }
+
+        /* Unit palette sidebar */
+        .unit-palette {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+
+        .palette-header {
+            background: #f8fafc;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 13px;
+        }
+
+        .palette-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .palette-category {
+            margin-bottom: 20px;
+        }
+
+        .category-header {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .category-units {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 0 4px;
+        }
+
+        .unit-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .unit-item:hover {
+            border-color: #6366f1;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+        }
+
+        .unit-icon {
+            font-size: 18px;
+            margin-bottom: 4px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .unit-name {
+            font-size: 10px;
+            font-weight: 500;
+            color: #374151;
+            line-height: 1.2;
+        }
+
+        /* Canvas area */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: 
+                radial-gradient(circle at 20px 20px, #e5e7eb 1px, transparent 1px),
+                linear-gradient(90deg, rgba(229, 231, 235, 0.3) 1px, transparent 1px),
+                linear-gradient(rgba(229, 231, 235, 0.3) 1px, transparent 1px);
+            background-size: 40px 40px, 20px 20px, 20px 20px;
+            overflow: hidden;
+        }
+
+        .canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: auto;
+        }
+
+        /* Unit nodes on canvas */
+        .unit-node {
+            position: absolute;
+            background: white;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+            user-select: none;
+            min-width: 100px;
+            font-size: 11px;
+        }
+
+        .unit-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            border-color: #6366f1;
+        }
+
+        .unit-node.selected {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+        }
+
+        .unit-node.dragging {
+            z-index: 1000;
+            transform: rotate(1deg) scale(1.02);
+        }
+
+        .node-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .node-icon {
+            margin-right: 6px;
+            font-size: 14px;
+        }
+
+        .node-title {
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
+        .node-id {
+            font-size: 9px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        /* Connection ports */
+        .connection-port {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: crosshair;
+            z-index: 10;
+        }
+
+        .port-inlet {
+            background: #10b981;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port-outlet {
+            background: #f59e0b;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port-utility {
+            background: #3b82f6;
+        }
+
+        /* Special unit styling */
+        .distillation-column {
+            width: 120px;
+            height: 160px;
+            background: linear-gradient(to bottom, #dbeafe, #bfdbfe);
+            border-color: #3b82f6;
+        }
+
+        .column-body {
+            width: 40px;
+            height: 100px;
+            background: linear-gradient(to bottom, #93c5fd, #3b82f6);
+            margin: 15px auto;
+            border-radius: 3px;
+            position: relative;
+            border: 1px solid #1d4ed8;
+        }
+
+        .column-tray {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: #1e40af;
+        }
+
+        .heat-exchanger {
+            width: 100px;
+            height: 60px;
+            background: linear-gradient(45deg, #fef3c7, #f59e0b);
+            border-color: #d97706;
+        }
+
+        .reactor {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #d1fae5, #10b981);
+            border-color: #059669;
+        }
+
+        /* Properties panel */
+        .properties-panel {
+            width: 350px;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+        }
+
+        .properties-header {
+            background: #f8fafc;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 13px;
+        }
+
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .property-section {
+            margin-bottom: 20px;
+            background: #f8fafc;
+            border-radius: 6px;
+            padding: 12px;
+            border-left: 3px solid #6366f1;
+        }
+
+        .property-section h4 {
+            color: #4338ca;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 6px 0;
+        }
+
+        .property-label {
+            font-size: 11px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .property-input {
+            width: 70px;
+            padding: 3px 6px;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            font-size: 11px;
+            text-align: right;
+        }
+
+        .property-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Toolbar */
+        .toolbar {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 8px;
+            z-index: 20;
+        }
+
+        .toolbar-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .toolbar-btn:hover {
+            border-color: #6366f1;
+            color: #4338ca;
+        }
+
+        .toolbar-btn.primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #059669;
+        }
+
+        .toolbar-btn.primary:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+
+        /* Stream connections */
+        .stream-line {
+            position: absolute;
+            height: 2px;
+            background: #6b7280;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .stream-arrow {
+            position: absolute;
+            right: -5px;
+            top: -3px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid #6b7280;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+        }
+
+        /* Empty state */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #9ca3af;
+            pointer-events: none;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Menu Bar -->
+        <div class="menu-bar">
+            <div class="logo">🧪 DeepSim - Industrial Process Simulator</div>
+            <div class="menu-item">File</div>
+            <div class="menu-item">Edit</div>
+            <div class="menu-item">View</div>
+            <div class="menu-item">Tools</div>
+            <div class="menu-item">Run</div>
+            <div class="menu-item">Help</div>
+        </div>
+
+        <div class="main-content">
+            <!-- Unit Operations Palette -->
+            <div class="unit-palette">
+                <div class="palette-header">
+                    Unit Operations Library
+                </div>
+                <div class="palette-content" id="paletteContent">
+                    <!-- Categories will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Main Canvas -->
+            <div class="canvas-container">
+                <div class="canvas" id="canvas">
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-state-icon">🏭</div>
+                        <div>Start building your process flowsheet</div>
+                        <div style="font-size: 10px; margin-top: 5px;">Drag unit operations from the left panel</div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <button class="toolbar-btn" onclick="clearFlowsheet()">🗑️ Clear</button>
+                    <button class="toolbar-btn" onclick="zoomToFit()">🔍 Fit</button>
+                    <button class="toolbar-btn" onclick="saveFlowsheet()">💾 Save</button>
+                    <button class="toolbar-btn primary" onclick="runSimulation()" id="simulateBtn">
+                        ▶️ Simulate
+                    </button>
+                </div>
+
+                <!-- Status Bar -->
+                <div class="status-bar" id="statusBar">
+                    Ready - Drag units from palette to design your process
+                </div>
+            </div>
+
+            <!-- Properties Panel -->
+            <div class="properties-panel">
+                <div class="properties-header" id="propertiesHeader">
+                    Unit Properties
+                </div>
+                <div class="properties-content" id="propertiesContent">
+                    <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
+                        <div style="font-size: 36px; margin-bottom: 12px;">⚙️</div>
+                        <div style="font-size: 12px;">Select a unit operation to view and edit its properties</div>
+                        <div style="font-size: 10px; color: #d1d5db; margin-top: 8px;">Industrial-grade configuration options available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Comprehensive unit operations library like Aspen Plus
+        const unitOperationsLibrary = {
+            'Separations': [
+                { type: 'DistillationColumn', name: 'Distillation Column', icon: '🏗️', desc: 'Rigorous MESH' },
+                { type: 'Flash', name: 'Flash Drum', icon: '⚡', desc: 'V-L Separator' },
+                { type: 'Absorber', name: 'Absorber', icon: '🌊', desc: 'Gas Absorption' },
+                { type: 'Stripper', name: 'Stripper', icon: '💨', desc: 'Gas Stripping' },
+                { type: 'Crystallizer', name: 'Crystallizer', icon: '💎', desc: 'Solid Formation' },
+                { type: 'Filter', name: 'Filter', icon: '🔽', desc: 'Solid Separation' },
+                { type: 'Centrifuge', name: 'Centrifuge', icon: '🌀', desc: 'Centrifugal Sep' },
+                { type: 'Membrane', name: 'Membrane', icon: '📄', desc: 'Membrane Sep' }
+            ],
+            'Reactors': [
+                { type: 'CSTR', name: 'CSTR', icon: '🧪', desc: 'Stirred Tank' },
+                { type: 'PFR', name: 'PFR', icon: '🔬', desc: 'Plug Flow' },
+                { type: 'BatchReactor', name: 'Batch Reactor', icon: '🛢️', desc: 'Batch Process' },
+                { type: 'PackedBed', name: 'Packed Bed', icon: '⬜', desc: 'Catalyst Bed' },
+                { type: 'Fluidized', name: 'Fluidized Bed', icon: '🫧', desc: 'Fluidized Cat' },
+                { type: 'Polymerizer', name: 'Polymerizer', icon: '🔗', desc: 'Polymer Rxn' }
+            ],
+            'Heat Transfer': [
+                { type: 'Heater', name: 'Heater', icon: '🔥', desc: 'Heat Addition' },
+                { type: 'Cooler', name: 'Cooler', icon: '❄️', desc: 'Heat Removal' },
+                { type: 'HeatExchanger', name: 'Heat Exchanger', icon: '🔄', desc: 'Heat Transfer' },
+                { type: 'Furnace', name: 'Furnace', icon: '🔥', desc: 'High Temp Heat' },
+                { type: 'Boiler', name: 'Boiler', icon: '♨️', desc: 'Steam Gen' },
+                { type: 'Condenser', name: 'Condenser', icon: '💧', desc: 'Condensation' },
+                { type: 'Evaporator', name: 'Evaporator', icon: '☁️', desc: 'Evaporation' },
+                { type: 'Reboiler', name: 'Reboiler', icon: '🔥', desc: 'Column Heating' }
+            ],
+            'Pressure Change': [
+                { type: 'Pump', name: 'Pump', icon: '⬆️', desc: 'Liquid Pump' },
+                { type: 'Compressor', name: 'Compressor', icon: '🔺', desc: 'Gas Compress' },
+                { type: 'Turbine', name: 'Turbine', icon: '⚡', desc: 'Expansion' },
+                { type: 'Valve', name: 'Valve', icon: '🔻', desc: 'Pressure Drop' },
+                { type: 'Ejector', name: 'Ejector', icon: '💨', desc: 'Steam Ejector' },
+                { type: 'Blower', name: 'Blower', icon: '🌪️', desc: 'Low Press Gas' }
+            ],
+            'Mixing & Flow': [
+                { type: 'Mixer', name: 'Mixer', icon: '🌀', desc: 'Stream Mixing' },
+                { type: 'Splitter', name: 'Splitter', icon: '🔀', desc: 'Stream Split' },
+                { type: 'Tee', name: 'Tee', icon: '⊥', desc: 'T-Junction' },
+                { type: 'Pipe', name: 'Pipe', icon: '➖', desc: 'Flow Transport' },
+                { type: 'Tank', name: 'Tank', icon: '🛢️', desc: 'Storage Tank' },
+                { type: 'Hopper', name: 'Hopper', icon: '🔽', desc: 'Solid Storage' }
+            ],
+            'Utilities & Control': [
+                { type: 'Controller', name: 'Controller', icon: '🎛️', desc: 'Process Control' },
+                { type: 'Sensor', name: 'Sensor', icon: '📡', desc: 'Measurement' },
+                { type: 'ActuatedValve', name: 'Control Valve', icon: '🎚️', desc: 'Auto Valve' },
+                { type: 'SafetyValve', name: 'Safety Valve', icon: '🛡️', desc: 'Pressure Relief' },
+                { type: 'CheckValve', name: 'Check Valve', icon: '↗️', desc: 'One Way Flow' },
+                { type: 'FlowMeter', name: 'Flow Meter', icon: '📊', desc: 'Flow Measure' }
+            ]
+        };
+
+        // Global state
+        let units = [];
+        let streams = [];
+        let selectedUnit = null;
+        let flowsheetId = null;
+        let unitCounter = 0;
+        let draggedUnit = null;
+        let isSimulating = false;
+
+        // Initialize the application
+        function initializeApp() {
+            renderUnitPalette();
+            setupCanvasEvents();
+            updateStatus('Ready - Industrial process simulation environment loaded');
+        }
+
+        // Render the unit operations palette
+        function renderUnitPalette() {
+            const paletteContent = document.getElementById('paletteContent');
+            
+            Object.entries(unitOperationsLibrary).forEach(([category, units]) => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'palette-category';
+                
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'category-header';
+                headerDiv.textContent = category;
+                headerDiv.onclick = () => toggleCategory(categoryDiv);
+                
+                const unitsDiv = document.createElement('div');
+                unitsDiv.className = 'category-units';
+                
+                units.forEach(unit => {
+                    const unitDiv = document.createElement('div');
+                    unitDiv.className = 'unit-item';
+                    unitDiv.draggable = true;
+                    unitDiv.dataset.unitType = unit.type;
+                    
+                    unitDiv.innerHTML = `
+                        <div class="unit-icon">${unit.icon}</div>
+                        <div class="unit-name">${unit.name}</div>
+                    `;
+                    
+                    unitDiv.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', unit.type);
+                        draggedUnit = unit;
+                    });
+                    
+                    unitDiv.addEventListener('click', () => {
+                        addUnitToCanvas(unit.type, { 
+                            x: 300 + Math.random() * 200, 
+                            y: 200 + Math.random() * 150 
+                        });
+                    });
+                    
+                    unitsDiv.appendChild(unitDiv);
+                });
+                
+                categoryDiv.appendChild(headerDiv);
+                categoryDiv.appendChild(unitsDiv);
+                paletteContent.appendChild(categoryDiv);
+            });
+        }
+
+        // Toggle category visibility
+        function toggleCategory(categoryDiv) {
+            const unitsDiv = categoryDiv.querySelector('.category-units');
+            unitsDiv.style.display = unitsDiv.style.display === 'none' ? 'grid' : 'none';
+        }
+
+        // Setup canvas drag and drop events
+        function setupCanvasEvents() {
+            const canvas = document.getElementById('canvas');
+            
+            canvas.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+            
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const unitType = e.dataTransfer.getData('text/plain');
+                const rect = canvas.getBoundingClientRect();
+                const position = {
+                    x: e.clientX - rect.left + canvas.scrollLeft,
+                    y: e.clientY - rect.top + canvas.scrollTop
+                };
+                addUnitToCanvas(unitType, position);
+            });
+            
+            canvas.addEventListener('click', (e) => {
+                if (e.target.id === 'canvas') {
+                    deselectAllUnits();
+                }
+            });
+        }
+
+        // Add unit to canvas
+        function addUnitToCanvas(unitType, position) {
+            unitCounter++;
+            
+            // Find unit definition
+            const unitDef = Object.values(unitOperationsLibrary)
+                .flat()
+                .find(u => u.type === unitType);
+            
+            if (!unitDef) return;
+            
+            const unit = {
+                id: `${unitType.toLowerCase()}_${unitCounter}`,
+                type: unitType,
+                name: `${unitDef.name} ${unitCounter}`,
+                position: position,
+                parameters: getDefaultParameters(unitType)
+            };
+            
+            units.push(unit);
+            renderUnit(unit);
+            
+            // Hide empty state
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) emptyState.style.display = 'none';
+            
+            updateStatus(`Added ${unitDef.name} to flowsheet`);
+        }
+
+        // Get default parameters for unit type
+        function getDefaultParameters(unitType) {
+            const defaults = {
+                'DistillationColumn': {
+                    stages: 20,
+                    refluxRatio: 2.5,
+                    feedStage: 10,
+                    distillateRate: 50,
+                    pressure: 101325,
+                    trayEfficiency: 0.75,
+                    condenser_type: 'total',
+                    reboiler_type: 'kettle'
+                },
+                'HeatExchanger': {
+                    approach_temp: 10,
+                    pressure_drop_hot: 5000,
+                    pressure_drop_cold: 5000,
+                    heat_transfer_coeff: 1000
+                },
+                'Pump': {
+                    efficiency: 0.75,
+                    pressure_increase: 50000,
+                    power_rating: 10
+                },
+                'CSTR': {
+                    volume: 100,
+                    residence_time: 3600,
+                    temperature: 298.15,
+                    pressure: 101325
+                }
+            };
+            
+            return defaults[unitType] || {};
+        }
+
+        // Render unit on canvas
+        function renderUnit(unit) {
+            const canvas = document.getElementById('canvas');
+            const unitDiv = document.createElement('div');
+            
+            unitDiv.className = 'unit-node';
+            unitDiv.id = unit.id;
+            unitDiv.style.left = unit.position.x + 'px';
+            unitDiv.style.top = unit.position.y + 'px';
+            
+            // Add special styling for specific unit types
+            if (unit.type === 'DistillationColumn') {
+                unitDiv.classList.add('distillation-column');
+                unitDiv.innerHTML = `
+                    <div class="node-header">
+                        <div class="node-icon">🏗️</div>
+                        <div>
+                            <div class="node-title">${unit.name}</div>
+                            <div class="node-id">${unit.id}</div>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        ${[1,2,3,4,5,6].map(i => `<div class="column-tray" style="top: ${i * 15}%"></div>`).join('')}
+                    </div>
+                    <div class="connection-port port-inlet" style="top: 50%; left: -6px;"></div>
+                    <div class="connection-port port-outlet" style="top: 20%; right: -6px;"></div>
+                    <div class="connection-port port-outlet" style="top: 80%; right: -6px;"></div>
+                    <div class="connection-port port-utility" style="top: 10%; left: 25%;"></div>
+                    <div class="connection-port port-utility" style="top: 90%; left: 25%;"></div>
+                `;
+            } else if (unit.type === 'HeatExchanger') {
+                unitDiv.classList.add('heat-exchanger');
+                unitDiv.innerHTML = `
+                    <div class="node-header">
+                        <div class="node-icon">🔄</div>
+                        <div>
+                            <div class="node-title">${unit.name}</div>
+                            <div class="node-id">${unit.id}</div>
+                        </div>
+                    </div>
+                    <div class="connection-port port-inlet" style="top: 30%; left: -6px;"></div>
+                    <div class="connection-port port-inlet" style="top: 70%; left: -6px;"></div>
+                    <div class="connection-port port-outlet" style="top: 30%; right: -6px;"></div>
+                    <div class="connection-port port-outlet" style="top: 70%; right: -6px;"></div>
+                `;
+            } else if (unit.type.includes('Reactor')) {
+                unitDiv.classList.add('reactor');
+                unitDiv.innerHTML = `
+                    <div class="node-header">
+                        <div class="node-icon">🧪</div>
+                        <div>
+                            <div class="node-title">${unit.name}</div>
+                            <div class="node-id">${unit.id}</div>
+                        </div>
+                    </div>
+                    <div class="connection-port port-inlet" style="top: 50%; left: -6px;"></div>
+                    <div class="connection-port port-outlet" style="top: 50%; right: -6px;"></div>
+                `;
+            } else {
+                // Standard unit
+                const unitDef = Object.values(unitOperationsLibrary).flat().find(u => u.type === unit.type);
+                unitDiv.innerHTML = `
+                    <div class="node-header">
+                        <div class="node-icon">${unitDef?.icon || '⚙️'}</div>
+                        <div>
+                            <div class="node-title">${unit.name}</div>
+                            <div class="node-id">${unit.id}</div>
+                        </div>
+                    </div>
+                    <div class="connection-port port-inlet"></div>
+                    <div class="connection-port port-outlet"></div>
+                `;
+            }
+            
+            makeDraggable(unitDiv, unit);
+            unitDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectUnit(unit);
+            });
+            
+            canvas.appendChild(unitDiv);
+        }
+
+        // Make unit draggable
+        function makeDraggable(element, unit) {
+            let isDragging = false;
+            let offset = { x: 0, y: 0 };
+
+            element.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('connection-port')) return;
+                
+                isDragging = true;
+                element.classList.add('dragging');
+                
+                const rect = element.getBoundingClientRect();
+                const canvas = document.getElementById('canvas');
+                const canvasRect = canvas.getBoundingClientRect();
+                
+                offset.x = e.clientX - rect.left;
+                offset.y = e.clientY - rect.top;
+
+                const handleMouseMove = (e) => {
+                    if (!isDragging) return;
+                    
+                    const newX = e.clientX - canvasRect.left + canvas.scrollLeft - offset.x;
+                    const newY = e.clientY - canvasRect.top + canvas.scrollTop - offset.y;
+                    
+                    element.style.left = Math.max(0, newX) + 'px';
+                    element.style.top = Math.max(0, newY) + 'px';
+                    
+                    unit.position.x = Math.max(0, newX);
+                    unit.position.y = Math.max(0, newY);
+                };
+
+                const handleMouseUp = () => {
+                    isDragging = false;
+                    element.classList.remove('dragging');
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+        }
+
+        // Select unit and show properties
+        function selectUnit(unit) {
+            deselectAllUnits();
+            
+            const element = document.getElementById(unit.id);
+            element.classList.add('selected');
+            selectedUnit = unit;
+            
+            updatePropertiesPanel(unit);
+            updateStatus(`Selected ${unit.name}`);
+        }
+
+        // Deselect all units
+        function deselectAllUnits() {
+            document.querySelectorAll('.unit-node').forEach(el => {
+                el.classList.remove('selected');
+            });
+            selectedUnit = null;
+            
+            const header = document.getElementById('propertiesHeader');
+            const content = document.getElementById('propertiesContent');
+            
+            header.textContent = 'Unit Properties';
+            content.innerHTML = `
+                <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
+                    <div style="font-size: 36px; margin-bottom: 12px;">⚙️</div>
+                    <div style="font-size: 12px;">Select a unit operation to view and edit its properties</div>
+                    <div style="font-size: 10px; color: #d1d5db; margin-top: 8px;">Industrial-grade configuration options available</div>
+                </div>
+            `;
+        }
+
+        // Update properties panel
+        function updatePropertiesPanel(unit) {
+            const header = document.getElementById('propertiesHeader');
+            const content = document.getElementById('propertiesContent');
+            
+            header.textContent = `${unit.name} Properties`;
+            
+            let html = '';
+            
+            if (unit.type === 'DistillationColumn') {
+                html = `
+                    <div class="property-section">
+                        <h4>Column Configuration</h4>
+                        <div class="property-row">
+                            <span class="property-label">Stages:</span>
+                            <input class="property-input" type="number" value="${unit.parameters.stages}" 
+                                   onchange="updateParameter('${unit.id}', 'stages', parseInt(this.value))">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Reflux Ratio:</span>
+                            <input class="property-input" type="number" step="0.1" value="${unit.parameters.refluxRatio}" 
+                                   onchange="updateParameter('${unit.id}', 'refluxRatio', parseFloat(this.value))">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Feed Stage:</span>
+                            <input class="property-input" type="number" value="${unit.parameters.feedStage}" 
+                                   onchange="updateParameter('${unit.id}', 'feedStage', parseInt(this.value))">
+                        </div>
+                    </div>
+                    
+                    <div class="property-section">
+                        <h4>Operating Conditions</h4>
+                        <div class="property-row">
+                            <span class="property-label">Pressure (Pa):</span>
+                            <input class="property-input" type="number" value="${unit.parameters.pressure}" 
+                                   onchange="updateParameter('${unit.id}', 'pressure', parseInt(this.value))">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Efficiency:</span>
+                            <input class="property-input" type="number" step="0.01" value="${unit.parameters.trayEfficiency}" 
+                                   onchange="updateParameter('${unit.id}', 'trayEfficiency', parseFloat(this.value))">
+                        </div>
+                    </div>
+                `;
+            } else if (unit.type === 'HeatExchanger') {
+                html = `
+                    <div class="property-section">
+                        <h4>Heat Transfer</h4>
+                        <div class="property-row">
+                            <span class="property-label">Approach T (K):</span>
+                            <input class="property-input" type="number" value="${unit.parameters.approach_temp || 10}" 
+                                   onchange="updateParameter('${unit.id}', 'approach_temp', parseFloat(this.value))">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">HTC (W/m²K):</span>
+                            <input class="property-input" type="number" value="${unit.parameters.heat_transfer_coeff || 1000}" 
+                                   onchange="updateParameter('${unit.id}', 'heat_transfer_coeff', parseFloat(this.value))">
+                        </div>
+                    </div>
+                `;
+            } else {
+                html = `
+                    <div class="property-section">
+                        <h4>Basic Properties</h4>
+                        <div class="property-row">
+                            <span class="property-label">Unit ID:</span>
+                            <span style="font-family: monospace; font-size: 10px;">${unit.id}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Type:</span>
+                            <span style="font-size: 10px;">${unit.type}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = html;
+        }
+
+        // Update unit parameter
+        function updateParameter(unitId, param, value) {
+            const unit = units.find(u => u.id === unitId);
+            if (unit) {
+                unit.parameters[param] = value;
+                updateStatus(`Updated ${param} = ${value}`);
+            }
+        }
+
+        // Clear flowsheet
+        function clearFlowsheet() {
+            units = [];
+            streams = [];
+            selectedUnit = null;
+            flowsheetId = null;
+            
+            const canvas = document.getElementById('canvas');
+            canvas.querySelectorAll('.unit-node').forEach(node => node.remove());
+            canvas.querySelectorAll('.stream-line').forEach(line => line.remove());
+            
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) emptyState.style.display = 'block';
+            
+            deselectAllUnits();
+            updateStatus('Flowsheet cleared - Ready for new design');
+        }
+
+        // Zoom to fit all units
+        function zoomToFit() {
+            if (units.length === 0) return;
+            
+            const canvas = document.getElementById('canvas');
+            const minX = Math.min(...units.map(u => u.position.x));
+            const minY = Math.min(...units.map(u => u.position.y));
+            const maxX = Math.max(...units.map(u => u.position.x + 150));
+            const maxY = Math.max(...units.map(u => u.position.y + 150));
+            
+            canvas.scrollTo((minX + maxX) / 2 - canvas.clientWidth / 2, 
+                           (minY + maxY) / 2 - canvas.clientHeight / 2);
+            
+            updateStatus('Zoomed to fit all units');
+        }
+
+        // Save flowsheet
+        function saveFlowsheet() {
+            const flowsheetData = {
+                name: 'Industrial Process Flowsheet',
+                units: units,
+                streams: streams,
+                timestamp: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(flowsheetData, null, 2)], 
+                                 { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'flowsheet.json';
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            updateStatus('Flowsheet saved to downloads');
+        }
+
+        // Run simulation
+        async function runSimulation() {
+            if (units.length === 0) {
+                updateStatus('Add some unit operations first!');
+                return;
+            }
+
+            const simulateBtn = document.getElementById('simulateBtn');
+            simulateBtn.disabled = true;
+            simulateBtn.innerHTML = '⚙️ Running...';
+            isSimulating = true;
+            
+            updateStatus('🚀 Running industrial-grade simulation...');
+
+            try {
+                // Create or update flowsheet
+                let currentFlowsheetId = flowsheetId;
+                if (!currentFlowsheetId) {
+                    const createResponse = await fetch('http://localhost:8000/flowsheet', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: 'Industrial Process Flowsheet',
+                            description: 'Professional flowsheet design'
+                        })
+                    });
+                    
+                    if (!createResponse.ok) throw new Error('Failed to create flowsheet');
+                    
+                    const createData = await createResponse.json();
+                    currentFlowsheetId = createData.flowsheet_id;
+                    flowsheetId = currentFlowsheetId;
+                }
+
+                const flowsheetData = {
+                    name: 'Industrial Process Flowsheet',
+                    description: 'Professional flowsheet design',
+                    units: units.map(unit => ({
+                        id: unit.id,
+                        type: unit.type,
+                        name: unit.name,
+                        parameters: unit.parameters,
+                        position: unit.position
+                    })),
+                    streams: [{
+                        id: 'main_feed',
+                        name: 'Process Feed',
+                        temperature: 368.15,
+                        pressure: 101325,
+                        molar_flow: 100.0,
+                        composition: { benzene: 0.6, toluene: 0.4 }
+                    }],
+                    connections: []
+                };
+
+                const updateResponse = await fetch(`http://localhost:8000/flowsheet/${currentFlowsheetId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(flowsheetData)
+                });
+
+                if (!updateResponse.ok) throw new Error('Failed to update flowsheet');
+
+                const simResponse = await fetch('http://localhost:8000/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ flowsheet_id: currentFlowsheetId })
+                });
+
+                if (!simResponse.ok) throw new Error('Simulation failed');
+
+                const simData = await simResponse.json();
+                
+                if (simData.status === 'completed') {
+                    const distResults = simData.results.distillation_results;
+                    if (distResults && Object.keys(distResults).length > 0) {
+                        const firstColumn = Object.values(distResults)[0];
+                        if (firstColumn.converged) {
+                            updateStatus('✅ Rigorous simulation completed - All units converged!');
+                        } else {
+                            updateStatus('⚠️ Simulation completed with convergence warnings');
+                        }
+                    } else {
+                        updateStatus('✅ Process simulation completed successfully');
+                    }
+                } else {
+                    updateStatus('❌ Simulation failed - Check unit configurations');
+                }
+
+            } catch (error) {
+                updateStatus('❌ Connection error - Ensure backend server is running on port 8000');
+            } finally {
+                simulateBtn.disabled = false;
+                simulateBtn.innerHTML = '▶️ Simulate';
+                isSimulating = false;
+            }
+        }
+
+        // Update status message
+        function updateStatus(message) {
+            document.getElementById('statusBar').textContent = message;
+        }
+
+        // Initialize the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>

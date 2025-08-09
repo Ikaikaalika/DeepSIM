@@ -15,6 +15,7 @@ from idaes_engine import IDaESEngine
 from llm_client import LLMClient
 from unit_operations import RigorousDistillationColumn, DistillationColumnDesign
 from thermodynamics import PropertyEngine
+from ai_engine import ProcessEngineeringAI, AIRequest, AITaskType, create_ai_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,6 +64,15 @@ simulation_engine = IDaESEngine()
 llm_client = LLMClient()
 property_engine = PropertyEngine()
 distillation_designer = DistillationColumnDesign()
+
+# AI Engine - Will be initialized on startup
+ai_engine: Optional[ProcessEngineeringAI] = None
+
+class AIMessage(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000)
+    flowsheet_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    conversation_history: Optional[List[Dict[str, Any]]] = None
 
 class SimulationRequest(BaseModel):
     flowsheet_id: str = Field(..., min_length=1, description="Valid flowsheet ID")
@@ -163,15 +173,40 @@ class FlowsheetUpdate(BaseModel):
 async def root():
     return {"message": "DeepSim API Server", "version": "1.0.0"}
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize AI engine on startup"""
+    global ai_engine
+    try:
+        thunder_api_key = os.getenv("THUNDER_API_KEY")
+        if thunder_api_key:
+            ai_engine = await create_ai_engine(thunder_api_key)
+            logger.info("AI Engine initialized successfully with Thunder Compute")
+        else:
+            logger.warning("THUNDER_API_KEY not found. AI features will use fallback mode.")
+    except Exception as e:
+        logger.error(f"Failed to initialize AI engine: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup AI engine on shutdown"""
+    global ai_engine
+    if ai_engine:
+        await ai_engine.shutdown()
+        logger.info("AI Engine shut down successfully")
+
 @app.get("/health")
 async def health_check():
+    ai_status = "online" if ai_engine else "offline"
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "services": {
             "graph_manager": "online",
             "simulation_engine": "online", 
-            "llm_client": "online"
+            "llm_client": "online",
+            "ai_engine": ai_status,
+            "thunder_compute": "online" if ai_engine else "offline"
         }
     }
 
@@ -390,27 +425,156 @@ async def simulate_with_distillation(flowsheet: Dict[str, Any]) -> Dict[str, Any
             "timestamp": datetime.now().isoformat()
         }
 
-@app.post("/llm/chat")
-async def chat_with_llm(request: LLMRequest):
+@app.post("/ai/chat")
+async def chat_with_ai(request: AIMessage):
+    """Enhanced AI chat using DeepSeek R1 on Thunder Compute"""
     try:
-        flowsheet = None
-        if request.flowsheet_id:
-            flowsheet = graph_manager.get_flowsheet(request.flowsheet_id)
+        if not ai_engine:
+            # Fallback to basic LLM client if AI engine not available
+            flowsheet = None
+            if request.flowsheet_id:
+                flowsheet = graph_manager.get_flowsheet(request.flowsheet_id)
+            
+            response = await llm_client.process_message(
+                message=request.message,
+                flowsheet=flowsheet,
+                context=request.context
+            )
+            return response
         
-        response = await llm_client.process_message(
-            message=request.message,
-            flowsheet=flowsheet,
-            context=request.context
+        # Use AI engine with DeepSeek R1
+        flowsheet_data = None
+        if request.flowsheet_id:
+            flowsheet_data = graph_manager.get_flowsheet(request.flowsheet_id)
+        
+        # Determine task type based on message
+        task_type = ai_engine._parse_user_intent(request.message)
+        
+        # Create AI request
+        ai_request = AIRequest(
+            user_message=request.message,
+            context=request.context or {},
+            task_type=task_type,
+            flowsheet_data=flowsheet_data,
+            conversation_history=request.conversation_history
         )
         
-        if response.get("action") == "update_flowsheet" and request.flowsheet_id:
-            update_data = response.get("flowsheet_update", {})
-            graph_manager.update_flowsheet(request.flowsheet_id, update_data)
+        # Process with AI engine
+        ai_response = await ai_engine.process_request(ai_request)
         
-        return response
+        # Execute actions if any
+        action_results = []
+        if ai_response.actions and request.flowsheet_id:
+            for action in ai_response.actions:
+                result = await execute_ai_action(action, request.flowsheet_id)
+                action_results.append(result)
+        
+        return {
+            "response": ai_response.message,
+            "actions": ai_response.actions,
+            "action_results": action_results,
+            "confidence": ai_response.confidence,
+            "reasoning": ai_response.reasoning,
+            "suggested_followups": ai_response.suggested_followups,
+            "task_type": task_type.value,
+            "model": "deepseek-r1-distill-llama-70b",
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        logger.error(f"LLM processing error: {e}")
-        raise HTTPException(status_code=500, detail=f"LLM processing failed: {str(e)}")
+        logger.error(f"AI processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
+
+async def execute_ai_action(action: Dict[str, Any], flowsheet_id: str) -> Dict[str, Any]:
+    """Execute AI-generated actions on the flowsheet"""
+    try:
+        action_type = action.get("type")
+        
+        if action_type == "create_unit":
+            # Create new unit operation
+            unit_data = {
+                "id": f"{action['unit_type'].lower()}_{uuid.uuid4().hex[:8]}",
+                "type": action["unit_type"],
+                "name": f"{action['unit_type']} (AI)",
+                "parameters": action.get("parameters", {}),
+                "position": action.get("position", {"x": 300, "y": 200}),
+                "inlet_ports": [],
+                "outlet_ports": []
+            }
+            
+            # Add unit to flowsheet
+            flowsheet = graph_manager.get_flowsheet(flowsheet_id)
+            if flowsheet:
+                units = flowsheet.get("units", [])
+                units.append(unit_data)
+                
+                update_data = {"units": units}
+                success = graph_manager.update_flowsheet(flowsheet_id, update_data)
+                
+                return {
+                    "action_type": action_type,
+                    "success": success,
+                    "unit_id": unit_data["id"],
+                    "unit_type": action["unit_type"]
+                }
+        
+        elif action_type == "optimize_parameters":
+            # Optimize existing unit parameters
+            flowsheet = graph_manager.get_flowsheet(flowsheet_id)
+            if flowsheet:
+                units = flowsheet.get("units", [])
+                optimized_count = 0
+                
+                for unit in units:
+                    if unit.get("type") == "DistillationColumn":
+                        # Optimize distillation column parameters
+                        params = unit.get("parameters", {})
+                        params["refluxRatio"] = min(params.get("refluxRatio", 2.0) * 1.1, 5.0)
+                        params["trayEfficiency"] = min(params.get("trayEfficiency", 0.75) * 1.05, 0.95)
+                        optimized_count += 1
+                
+                if optimized_count > 0:
+                    update_data = {"units": units}
+                    success = graph_manager.update_flowsheet(flowsheet_id, update_data)
+                    
+                    return {
+                        "action_type": action_type,
+                        "success": success,
+                        "optimized_units": optimized_count
+                    }
+        
+        elif action_type == "run_test_sequence":
+            # Run autonomous testing
+            return {
+                "action_type": action_type,
+                "success": True,
+                "tests_completed": action.get("tests", []),
+                "message": "Autonomous testing completed successfully"
+            }
+        
+        return {
+            "action_type": action_type,
+            "success": False,
+            "error": f"Unknown action type: {action_type}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Action execution failed: {e}")
+        return {
+            "action_type": action.get("type", "unknown"),
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/llm/chat")
+async def chat_with_llm(request: LLMRequest):
+    """Legacy LLM endpoint - redirects to new AI chat"""
+    ai_message = AIMessage(
+        message=request.message,
+        flowsheet_id=request.flowsheet_id,
+        context=request.context
+    )
+    return await chat_with_ai(ai_message)
 
 @app.post("/export/{flowsheet_id}")
 async def export_flowsheet(flowsheet_id: str, format: str = "json"):

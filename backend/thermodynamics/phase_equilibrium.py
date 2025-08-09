@@ -7,7 +7,10 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 import logging
 
-from .component_database import ComponentDatabase
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+from component_database import ComponentDatabase
 
 logger = logging.getLogger(__name__)
 

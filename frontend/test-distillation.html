@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSim Distillation Column Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #1e3a8a;
+            margin-bottom: 30px;
+        }
+        .distillation-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .form-section {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #8b5cf6;
+        }
+        .form-section h3 {
+            margin-top: 0;
+            color: #7c3aed;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #374151;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .button {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            border-left: 4px solid #0ea5e9;
+        }
+        .results h3 {
+            color: #0284c7;
+            margin-top: 0;
+        }
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .result-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+        .result-card h4 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status.completed {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status.failed {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+        }
+        .column-visual {
+            width: 60px;
+            height: 200px;
+            background: linear-gradient(to bottom, #e0e7ff, #c7d2fe, #a5b4fc, #8b5cf6);
+            border: 2px solid #7c3aed;
+            border-radius: 6px;
+            margin: 10px auto;
+            position: relative;
+        }
+        .tray {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #4c1d95;
+        }
+        .feed-arrow {
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 10px solid #059669;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 DeepSim - Rigorous Distillation Column</h1>
+            <p>Industrial-grade MESH equation solver with real thermodynamic properties</p>
+        </div>
+
+        <div class="distillation-form">
+            <div class="form-section">
+                <h3>📊 Column Configuration</h3>
+                <div class="form-group">
+                    <label for="stages">Number of Stages:</label>
+                    <input type="number" id="stages" value="25" min="5" max="200">
+                </div>
+                <div class="form-group">
+                    <label for="refluxRatio">Reflux Ratio:</label>
+                    <input type="number" id="refluxRatio" value="3.0" step="0.1" min="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="feedStage">Feed Stage:</label>
+                    <input type="number" id="feedStage" value="12" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="distillateRate">Distillate Rate (kmol/h):</label>
+                    <input type="number" id="distillateRate" value="45" step="0.1" min="0.1">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>🌡️ Operating Conditions</h3>
+                <div class="form-group">
+                    <label for="pressure">Column Pressure (Pa):</label>
+                    <input type="number" id="pressure" value="101325" step="1000">
+                </div>
+                <div class="form-group">
+                    <label for="trayEfficiency">Tray Efficiency:</label>
+                    <input type="number" id="trayEfficiency" value="0.80" step="0.01" min="0.1" max="1.0">
+                </div>
+                <div class="form-group">
+                    <label for="feedTemp">Feed Temperature (K):</label>
+                    <input type="number" id="feedTemp" value="368.15" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="method">Thermodynamic Method:</label>
+                    <select id="method">
+                        <option value="PENG-ROBINSON">Peng-Robinson</option>
+                        <option value="SRK">Soave-Redlich-Kwong</option>
+                        <option value="UNIFAC">UNIFAC</option>
+                        <option value="WILSON">Wilson</option>
+                        <option value="NRTL">NRTL</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>⚗️ Feed Composition</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="benzene">Benzene Mole Fraction:</label>
+                    <input type="number" id="benzene" value="0.6" step="0.01" min="0" max="1">
+                </div>
+                <div class="form-group">
+                    <label for="toluene">Toluene Mole Fraction:</label>
+                    <input type="number" id="toluene" value="0.4" step="0.01" min="0" max="1">
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <div class="column-visual">
+                <div class="tray" style="top: 10%"></div>
+                <div class="tray" style="top: 20%"></div>
+                <div class="tray" style="top: 30%"></div>
+                <div class="tray" style="top: 40%"></div>
+                <div class="tray" style="top: 50%"></div>
+                <div class="tray" style="top: 60%"></div>
+                <div class="tray" style="top: 70%"></div>
+                <div class="tray" style="top: 80%"></div>
+                <div class="feed-arrow"></div>
+            </div>
+            <button class="button" onclick="runDistillationSimulation()">
+                🚀 Run Rigorous MESH Simulation
+            </button>
+        </div>
+
+        <div id="results" class="results" style="display: none;">
+            <h3>📈 Simulation Results</h3>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runDistillationSimulation() {
+            const resultsDiv = document.getElementById('results');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            // Show loading
+            resultsDiv.style.display = 'block';
+            resultsContent.innerHTML = '<div class="loading">⚙️ Running rigorous MESH equations solver...</div>';
+
+            try {
+                // Create flowsheet
+                const createResponse = await fetch('http://localhost:8000/flowsheet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: 'Test Distillation Column',
+                        description: 'Web UI Test of Rigorous Distillation'
+                    })
+                });
+                
+                if (!createResponse.ok) {
+                    throw new Error('Failed to create flowsheet');
+                }
+                
+                const createData = await createResponse.json();
+                const flowsheetId = createData.flowsheet_id;
+
+                // Get form values
+                const stages = parseInt(document.getElementById('stages').value);
+                const refluxRatio = parseFloat(document.getElementById('refluxRatio').value);
+                const feedStage = parseInt(document.getElementById('feedStage').value);
+                const distillateRate = parseFloat(document.getElementById('distillateRate').value);
+                const pressure = parseInt(document.getElementById('pressure').value);
+                const trayEfficiency = parseFloat(document.getElementById('trayEfficiency').value);
+                const feedTemp = parseFloat(document.getElementById('feedTemp').value);
+                const benzene = parseFloat(document.getElementById('benzene').value);
+                const toluene = parseFloat(document.getElementById('toluene').value);
+
+                // Update flowsheet with distillation column
+                const updateResponse = await fetch(`http://localhost:8000/flowsheet/${flowsheetId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: 'Test Distillation Column',
+                        description: 'Web UI Test of Rigorous Distillation',
+                        units: [{
+                            id: 'distillation_test',
+                            type: 'DistillationColumn',
+                            name: 'Test Column',
+                            parameters: {
+                                stages,
+                                refluxRatio,
+                                feedStage,
+                                distillateRate,
+                                pressure,
+                                trayEfficiency,
+                                feed_benzene: benzene,
+                                feed_toluene: toluene,
+                                feed_temperature: feedTemp
+                            },
+                            position: { x: 300, y: 200 }
+                        }],
+                        streams: [{
+                            id: 'feed',
+                            name: 'Feed Stream',
+                            temperature: feedTemp,
+                            pressure: pressure,
+                            molar_flow: 100.0,
+                            composition: {
+                                benzene: benzene,
+                                toluene: toluene
+                            }
+                        }],
+                        connections: []
+                    })
+                });
+
+                if (!updateResponse.ok) {
+                    throw new Error('Failed to update flowsheet');
+                }
+
+                // Run simulation
+                const simResponse = await fetch('http://localhost:8000/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ flowsheet_id: flowsheetId })
+                });
+
+                if (!simResponse.ok) {
+                    throw new Error('Simulation failed');
+                }
+
+                const simData = await simResponse.json();
+                displayResults(simData.results);
+
+            } catch (error) {
+                resultsContent.innerHTML = `
+                    <div class="result-card">
+                        <h4>❌ Simulation Error</h4>
+                        <p style="color: #dc2626;">${error.message}</p>
+                        <p><strong>Note:</strong> Make sure the backend server is running on port 8000</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResults(results) {
+            const resultsContent = document.getElementById('resultsContent');
+            
+            const distResult = results.distillation_results?.distillation_test || {};
+            const unitResult = results.units?.distillation_test || {};
+
+            const html = `
+                <div class="result-grid">
+                    <div class="result-card">
+                        <h4>🎯 Simulation Status</h4>
+                        <span class="status ${results.status}">${results.status}</span>
+                        <p><strong>Method:</strong> ${results.thermodynamic_method || 'PENG-ROBINSON'}</p>
+                        <p><strong>Converged:</strong> ${distResult.converged ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Iterations:</strong> ${distResult.iterations || 0}</p>
+                    </div>
+
+                    <div class="result-card">
+                        <h4>⚗️ Product Compositions</h4>
+                        ${distResult.product_compositions ? `
+                            <p><strong>Distillate:</strong></p>
+                            <ul>
+                                <li>Benzene: ${(distResult.product_compositions.distillate.benzene * 100).toFixed(1)}%</li>
+                                <li>Toluene: ${(distResult.product_compositions.distillate.toluene * 100).toFixed(1)}%</li>
+                            </ul>
+                            <p><strong>Bottoms:</strong></p>
+                            <ul>
+                                <li>Benzene: ${(distResult.product_compositions.bottoms.benzene * 100).toFixed(1)}%</li>
+                                <li>Toluene: ${(distResult.product_compositions.bottoms.toluene * 100).toFixed(1)}%</li>
+                            </ul>
+                        ` : '<p>No composition data available</p>'}
+                    </div>
+
+                    <div class="result-card">
+                        <h4>🔥 Energy Duties</h4>
+                        ${distResult.energy_duties ? `
+                            <p><strong>Reboiler:</strong> ${distResult.energy_duties.reboiler_duty.toFixed(2)} kW</p>
+                            <p><strong>Condenser:</strong> ${distResult.energy_duties.condenser_duty.toFixed(2)} kW</p>
+                            <p><strong>Net:</strong> ${distResult.energy_duties.net_duty.toFixed(2)} kW</p>
+                        ` : '<p>No energy data available</p>'}
+                    </div>
+
+                    <div class="result-card">
+                        <h4>📊 Column Performance</h4>
+                        ${distResult.column_performance ? `
+                            <p><strong>Stages:</strong> ${distResult.column_performance.stages}</p>
+                            <p><strong>Feed Stage:</strong> ${distResult.column_performance.feed_stage}</p>
+                            <p><strong>Reflux Ratio:</strong> ${distResult.column_performance.reflux_ratio}</p>
+                            <p><strong>Tray Efficiency:</strong> ${(distResult.column_performance.tray_efficiency * 100).toFixed(0)}%</p>
+                        ` : '<p>No performance data available</p>'}
+                    </div>
+
+                    ${distResult.column_sizing ? `
+                    <div class="result-card">
+                        <h4>🏗️ Column Sizing</h4>
+                        <p><strong>Diameter:</strong> ${distResult.column_sizing.tower_diameter?.toFixed(2)} m</p>
+                        <p><strong>Height:</strong> ${distResult.column_sizing.tower_height?.toFixed(1)} m</p>
+                        <p><strong>Approach to Flood:</strong> ${distResult.column_sizing.approach_to_flood?.toFixed(0)}%</p>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                    <h4 style="margin-top: 0; color: #92400e;">🔬 MESH Equation Details</h4>
+                    <p><strong>Material Balances:</strong> Solved for each stage and component</p>
+                    <p><strong>Equilibrium Relations:</strong> K-values calculated using ${results.thermodynamic_method}</p>
+                    <p><strong>Summation Equations:</strong> Composition constraints enforced</p>
+                    <p><strong>Heat Balances:</strong> Bubble/dew point calculations performed</p>
+                    <p style="margin-bottom: 0;"><em>This is industrial-grade rigorous simulation like Aspen Plus!</em></p>
+                </div>
+            `;
+
+            resultsContent.innerHTML = html;
+        }
+
+        // Auto-normalize composition inputs
+        document.getElementById('benzene').addEventListener('input', function() {
+            const benzene = parseFloat(this.value) || 0;
+            document.getElementById('toluene').value = (1 - benzene).toFixed(2);
+        });
+
+        document.getElementById('toluene').addEventListener('input', function() {
+            const toluene = parseFloat(this.value) || 0;
+            document.getElementById('benzene').value = (1 - toluene).toFixed(2);
+        });
+    </script>
+</body>
+</html>

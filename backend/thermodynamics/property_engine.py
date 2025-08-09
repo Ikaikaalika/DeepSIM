@@ -22,7 +22,10 @@ except ImportError:
     COOLPROP_AVAILABLE = False
     logging.warning("CoolProp not available. Install with: pip install CoolProp")
 
-from .component_database import ComponentDatabase
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+from component_database import ComponentDatabase
 
 logger = logging.getLogger(__name__)
 

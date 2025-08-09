@@ -9,7 +9,10 @@ import logging
 from scipy.optimize import fsolve
 from scipy.linalg import solve
 
-from ..thermodynamics import PropertyEngine
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from thermodynamics import PropertyEngine
 
 logger = logging.getLogger(__name__)
 

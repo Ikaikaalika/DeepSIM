@@ -143,7 +143,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ flowsheetId, simulationResults })
                   <div key={key}>
                     <span className="font-medium">{key.replace(/_/g, ' ')}:</span>
                     <div className="ml-2">
-                      {typeof value === 'object' ? (
+                      {typeof value === 'object' && value !== null ? (
                         <ul className="list-disc list-inside">
                           {Object.entries(value).map(([subKey, subValue]) => (
                             <li key={subKey}>{subKey}: {String(subValue)}</li>

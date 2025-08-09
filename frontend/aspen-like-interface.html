@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSim - Process Flowsheet Designer</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/reactflow@11/dist/umd/index.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/reactflow@11/dist/style.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            background: #f8fafc;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            width: 280px;
+            background: white;
+            border-right: 2px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .toolbar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .toolbar-header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .toolbar-header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .unit-palette {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .palette-section {
+            margin-bottom: 25px;
+        }
+
+        .palette-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .unit-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .unit-item:hover {
+            border-color: #8b5cf6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+        }
+
+        .unit-item:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .unit-icon {
+            width: 32px;
+            height: 32px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .unit-info {
+            flex: 1;
+        }
+
+        .unit-name {
+            font-weight: 500;
+            color: #1e293b;
+            font-size: 13px;
+        }
+
+        .unit-desc {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* Main canvas area */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+        }
+
+        .flowsheet-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Properties panel */
+        .properties-panel {
+            width: 350px;
+            background: white;
+            border-left: 2px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .properties-header {
+            padding: 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .properties-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .property-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 3px solid #8b5cf6;
+        }
+
+        .property-group h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #7c3aed;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .property-label {
+            font-size: 12px;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .property-input {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 80px;
+            text-align: right;
+        }
+
+        .property-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+        }
+
+        /* Control buttons */
+        .control-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        .control-btn {
+            padding: 10px 15px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: #475569;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .control-btn:hover {
+            border-color: #8b5cf6;
+            color: #7c3aed;
+        }
+
+        .simulate-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #059669;
+        }
+
+        .simulate-btn:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+
+        /* Custom node styles */
+        .custom-node {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            min-width: 120px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .custom-node.selected {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .custom-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .node-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .node-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+
+        .node-title {
+            font-weight: 600;
+            font-size: 12px;
+            color: #1e293b;
+        }
+
+        .node-type {
+            font-size: 10px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+
+        /* Distillation column specific styling */
+        .distillation-node {
+            width: 140px;
+            height: 180px;
+            background: linear-gradient(to bottom, #e0e7ff, #c7d2fe);
+            border: 2px solid #7c3aed;
+            position: relative;
+        }
+
+        .column-body {
+            width: 60px;
+            height: 120px;
+            background: linear-gradient(to bottom, #ddd6fe, #a78bfa);
+            margin: 20px auto;
+            border-radius: 4px;
+            position: relative;
+            border: 1px solid #7c3aed;
+        }
+
+        .column-tray {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: #6d28d9;
+        }
+
+        .column-condenser {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 6px;
+            background: #60a5fa;
+            border-radius: 2px;
+        }
+
+        .column-reboiler {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 6px;
+            background: #f87171;
+            border-radius: 2px;
+        }
+
+        /* React Flow handle styling */
+        .react-flow__handle {
+            width: 8px;
+            height: 8px;
+            border: 2px solid white;
+            border-radius: 50%;
+        }
+
+        .react-flow__handle-top {
+            background: #60a5fa;
+        }
+
+        .react-flow__handle-bottom {
+            background: #f87171;
+        }
+
+        .react-flow__handle-left {
+            background: #10b981;
+        }
+
+        .react-flow__handle-right {
+            background: #f59e0b;
+        }
+
+        /* Status indicator */
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback, useRef, useMemo } = React;
+        const { 
+            ReactFlow, 
+            Background, 
+            Controls, 
+            MiniMap, 
+            useNodesState, 
+            useEdgesState, 
+            addEdge,
+            Handle,
+            Position
+        } = ReactFlow;
+
+        // Unit Operations Data
+        const unitOperations = {
+            'Separations': [
+                {
+                    type: 'DistillationColumn',
+                    name: 'Distillation Column',
+                    description: 'Rigorous MESH solver',
+                    icon: '🏗️',
+                    color: '#7c3aed'
+                },
+                {
+                    type: 'Flash',
+                    name: 'Flash Drum',
+                    description: 'Vapor-liquid separator',
+                    icon: '⚡',
+                    color: '#ec4899'
+                },
+                {
+                    type: 'Absorber',
+                    name: 'Absorber',
+                    description: 'Gas absorption column',
+                    icon: '🌊',
+                    color: '#0ea5e9'
+                }
+            ],
+            'Reactors': [
+                {
+                    type: 'CSTR',
+                    name: 'CSTR',
+                    description: 'Continuous stirred tank',
+                    icon: '🧪',
+                    color: '#10b981'
+                },
+                {
+                    type: 'PFR',
+                    name: 'PFR',
+                    description: 'Plug flow reactor',
+                    icon: '🔬',
+                    color: '#059669'
+                }
+            ],
+            'Heat Transfer': [
+                {
+                    type: 'Heater',
+                    name: 'Heater',
+                    description: 'Heat addition',
+                    icon: '🔥',
+                    color: '#dc2626'
+                },
+                {
+                    type: 'Cooler',
+                    name: 'Cooler',
+                    description: 'Heat removal',
+                    icon: '❄️',
+                    color: '#2563eb'
+                },
+                {
+                    type: 'HeatExchanger',
+                    name: 'Heat Exchanger',
+                    description: 'Heat transfer between streams',
+                    icon: '🔄',
+                    color: '#0891b2'
+                }
+            ],
+            'Pressure Change': [
+                {
+                    type: 'Pump',
+                    name: 'Pump',
+                    description: 'Liquid pressure increase',
+                    icon: '⬆️',
+                    color: '#7c2d12'
+                },
+                {
+                    type: 'Compressor',
+                    name: 'Compressor',
+                    description: 'Gas pressure increase',
+                    icon: '🔺',
+                    color: '#ea580c'
+                },
+                {
+                    type: 'Valve',
+                    name: 'Valve',
+                    description: 'Pressure reduction',
+                    icon: '🔻',
+                    color: '#6b7280'
+                }
+            ],
+            'Mixing': [
+                {
+                    type: 'Mixer',
+                    name: 'Mixer',
+                    description: 'Stream combination',
+                    icon: '🌀',
+                    color: '#ca8a04'
+                },
+                {
+                    type: 'Splitter',
+                    name: 'Splitter',
+                    description: 'Stream separation',
+                    icon: '🔀',
+                    color: '#4338ca'
+                }
+            ]
+        };
+
+        // Custom Node Components
+        const DistillationColumnNode = ({ data, selected }) => {
+            return (
+                <div className={`distillation-node custom-node ${selected ? 'selected' : ''}`}>
+                    <Handle type="target" position={Position.Left} id="feed" style={{ top: '50%', background: '#10b981' }} />
+                    <Handle type="target" position={Position.Top} id="condenser" style={{ left: '25%', background: '#60a5fa' }} />
+                    <Handle type="target" position={Position.Bottom} id="reboiler" style={{ left: '25%', background: '#f87171' }} />
+                    
+                    <div className="node-header">
+                        <span className="node-icon">🏗️</span>
+                        <div>
+                            <div className="node-title">{data.name || 'Distillation'}</div>
+                            <div className="node-type">Column</div>
+                        </div>
+                    </div>
+                    
+                    <div className="column-body">
+                        <div className="column-condenser"></div>
+                        {[1,2,3,4,5,6].map(i => (
+                            <div key={i} className="column-tray" style={{ top: `${i * 15}%` }}></div>
+                        ))}
+                        <div className="column-reboiler"></div>
+                    </div>
+                    
+                    <Handle type="source" position={Position.Top} id="distillate" style={{ left: '75%', background: '#10b981' }} />
+                    <Handle type="source" position={Position.Bottom} id="bottoms" style={{ left: '75%', background: '#f59e0b' }} />
+                </div>
+            );
+        };
+
+        const StandardUnitNode = ({ data, selected }) => {
+            const unitInfo = Object.values(unitOperations).flat().find(u => u.type === data.unitType);
+            
+            return (
+                <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: unitInfo?.color }}>
+                    <Handle type="target" position={Position.Left} />
+                    
+                    <div className="node-header">
+                        <span className="node-icon">{unitInfo?.icon || '⚙️'}</span>
+                        <div>
+                            <div className="node-title">{data.name || unitInfo?.name}</div>
+                            <div className="node-type">{unitInfo?.type}</div>
+                        </div>
+                    </div>
+                    
+                    {data.parameters && Object.keys(data.parameters).length > 0 && (
+                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '8px' }}>
+                            {Object.entries(data.parameters).slice(0, 2).map(([key, value]) => (
+                                <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>{key}:</span>
+                                    <span>{typeof value === 'number' ? value.toFixed(1) : value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    <Handle type="source" position={Position.Right} />
+                </div>
+            );
+        };
+
+        // Node Types
+        const nodeTypes = {
+            distillationColumn: DistillationColumnNode,
+            standardUnit: StandardUnitNode
+        };
+
+        // Main Application Component
+        const ProcessFlowsheetApp = () => {
+            const [nodes, setNodes, onNodesChange] = useNodesState([]);
+            const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+            const [selectedNode, setSelectedNode] = useState(null);
+            const [flowsheetId, setFlowsheetId] = useState(null);
+            const [isSimulating, setIsSimulating] = useState(false);
+            const [statusMessage, setStatusMessage] = useState('Ready to design your process');
+
+            const reactFlowWrapper = useRef(null);
+            const [reactFlowInstance, setReactFlowInstance] = useState(null);
+
+            const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), []);
+
+            const onDragOver = useCallback((event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+            }, []);
+
+            const onDrop = useCallback(
+                (event) => {
+                    event.preventDefault();
+
+                    const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+                    const type = event.dataTransfer.getData('application/reactflow');
+
+                    if (typeof type === 'undefined' || !type) {
+                        return;
+                    }
+
+                    const position = reactFlowInstance.project({
+                        x: event.clientX - reactFlowBounds.left,
+                        y: event.clientY - reactFlowBounds.top,
+                    });
+
+                    const unitInfo = Object.values(unitOperations).flat().find(u => u.type === type);
+                    
+                    const newNode = {
+                        id: `${type.toLowerCase()}_${Date.now()}`,
+                        type: type === 'DistillationColumn' ? 'distillationColumn' : 'standardUnit',
+                        position,
+                        data: { 
+                            name: `${unitInfo?.name} ${nodes.length + 1}`,
+                            unitType: type,
+                            parameters: type === 'DistillationColumn' ? {
+                                stages: 20,
+                                refluxRatio: 2.0,
+                                feedStage: 10,
+                                distillateRate: 50,
+                                pressure: 101325,
+                                trayEfficiency: 0.75
+                            } : {}
+                        },
+                    };
+
+                    setNodes((nds) => nds.concat(newNode));
+                    setStatusMessage(`Added ${unitInfo?.name} to flowsheet`);
+                },
+                [reactFlowInstance, nodes.length, setNodes]
+            );
+
+            const onSelectionChange = useCallback(({ nodes }) => {
+                if (nodes.length > 0) {
+                    setSelectedNode(nodes[0]);
+                } else {
+                    setSelectedNode(null);
+                }
+            }, []);
+
+            const onDragStart = (event, nodeType) => {
+                event.dataTransfer.setData('application/reactflow', nodeType);
+                event.dataTransfer.effectAllowed = 'move';
+            };
+
+            const updateNodeParameter = (nodeId, paramKey, value) => {
+                setNodes(nodes => 
+                    nodes.map(node => 
+                        node.id === nodeId 
+                            ? { ...node, data: { ...node.data, parameters: { ...node.data.parameters, [paramKey]: value } } }
+                            : node
+                    )
+                );
+            };
+
+            const runSimulation = async () => {
+                if (nodes.length === 0) {
+                    setStatusMessage('Add some unit operations first!');
+                    return;
+                }
+
+                setIsSimulating(true);
+                setStatusMessage('Running simulation...');
+
+                try {
+                    // Create flowsheet if needed
+                    let currentFlowsheetId = flowsheetId;
+                    if (!currentFlowsheetId) {
+                        const createResponse = await fetch('http://localhost:8000/flowsheet', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: 'Process Flowsheet',
+                                description: 'Drag-and-drop flowsheet design'
+                            })
+                        });
+                        const createData = await createResponse.json();
+                        currentFlowsheetId = createData.flowsheet_id;
+                        setFlowsheetId(currentFlowsheetId);
+                    }
+
+                    // Update flowsheet
+                    const flowsheetData = {
+                        name: 'Process Flowsheet',
+                        description: 'Drag-and-drop flowsheet design',
+                        units: nodes.map(node => ({
+                            id: node.id,
+                            type: node.data.unitType,
+                            name: node.data.name,
+                            parameters: node.data.parameters || {},
+                            position: { x: node.position.x, y: node.position.y }
+                        })),
+                        streams: [],
+                        connections: edges.map(edge => ({
+                            from_unit: edge.source,
+                            to_unit: edge.target,
+                            from_port: edge.sourceHandle,
+                            to_port: edge.targetHandle
+                        }))
+                    };
+
+                    await fetch(`http://localhost:8000/flowsheet/${currentFlowsheetId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(flowsheetData)
+                    });
+
+                    // Run simulation
+                    const simResponse = await fetch('http://localhost:8000/simulate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ flowsheet_id: currentFlowsheetId })
+                    });
+
+                    const simData = await simResponse.json();
+                    
+                    if (simData.status === 'completed') {
+                        const distillationResults = simData.results.distillation_results;
+                        const hasDistillation = distillationResults && Object.keys(distillationResults).length > 0;
+                        
+                        if (hasDistillation) {
+                            const firstColumn = Object.values(distillationResults)[0];
+                            if (firstColumn.converged) {
+                                setStatusMessage('✅ Simulation completed - MESH equations converged!');
+                            } else {
+                                setStatusMessage('⚠️ Simulation completed - Convergence issues detected');
+                            }
+                        } else {
+                            setStatusMessage('✅ Simulation completed successfully');
+                        }
+                    } else {
+                        setStatusMessage('❌ Simulation failed - Check unit configurations');
+                    }
+
+                } catch (error) {
+                    setStatusMessage('❌ Simulation error - Check backend connection');
+                } finally {
+                    setIsSimulating(false);
+                }
+            };
+
+            const clearFlowsheet = () => {
+                setNodes([]);
+                setEdges([]);
+                setSelectedNode(null);
+                setFlowsheetId(null);
+                setStatusMessage('Flowsheet cleared - Ready for new design');
+            };
+
+            return (
+                <div className="app-container">
+                    {/* Unit Operations Toolbar */}
+                    <div className="toolbar">
+                        <div className="toolbar-header">
+                            <h1>🧪 DeepSim</h1>
+                            <p>Process Flowsheet Designer</p>
+                        </div>
+                        
+                        <div className="unit-palette">
+                            {Object.entries(unitOperations).map(([category, units]) => (
+                                <div key={category} className="palette-section">
+                                    <h3>{category}</h3>
+                                    {units.map(unit => (
+                                        <div
+                                            key={unit.type}
+                                            className="unit-item"
+                                            draggable
+                                            onDragStart={(event) => onDragStart(event, unit.type)}
+                                        >
+                                            <div className="unit-icon" style={{ backgroundColor: unit.color + '20', color: unit.color }}>
+                                                {unit.icon}
+                                            </div>
+                                            <div className="unit-info">
+                                                <div className="unit-name">{unit.name}</div>
+                                                <div className="unit-desc">{unit.description}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Main Canvas */}
+                    <div className="canvas-container" ref={reactFlowWrapper}>
+                        <ReactFlow
+                            nodes={nodes}
+                            edges={edges}
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnect={onConnect}
+                            onInit={setReactFlowInstance}
+                            onDrop={onDrop}
+                            onDragOver={onDragOver}
+                            onSelectionChange={onSelectionChange}
+                            nodeTypes={nodeTypes}
+                            className="flowsheet-canvas"
+                            snapToGrid={true}
+                            snapGrid={[15, 15]}
+                        >
+                            <Background variant="dots" gap={20} size={1} />
+                            <Controls />
+                            <MiniMap />
+                        </ReactFlow>
+
+                        {/* Control Bar */}
+                        <div className="control-bar">
+                            <button className="control-btn" onClick={clearFlowsheet}>
+                                🗑️ Clear
+                            </button>
+                            <button 
+                                className="control-btn simulate-btn" 
+                                onClick={runSimulation}
+                                disabled={isSimulating}
+                            >
+                                {isSimulating ? '⚙️ Running...' : '🚀 Simulate'}
+                            </button>
+                        </div>
+
+                        {/* Status Bar */}
+                        <div className="status-bar">
+                            {statusMessage}
+                        </div>
+                    </div>
+
+                    {/* Properties Panel */}
+                    <div className="properties-panel">
+                        <div className="properties-header">
+                            <h3>{selectedNode ? `Properties: ${selectedNode.data.name}` : 'Select a Unit Operation'}</h3>
+                        </div>
+                        
+                        <div className="properties-content">
+                            {selectedNode ? (
+                                selectedNode.data.unitType === 'DistillationColumn' ? (
+                                    <>
+                                        <div className="property-group">
+                                            <h4>Column Configuration</h4>
+                                            <div className="property-row">
+                                                <span className="property-label">Stages:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    value={selectedNode.data.parameters.stages || 20}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'stages', parseInt(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="property-row">
+                                                <span className="property-label">Reflux Ratio:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={selectedNode.data.parameters.refluxRatio || 2.0}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'refluxRatio', parseFloat(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="property-row">
+                                                <span className="property-label">Feed Stage:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    value={selectedNode.data.parameters.feedStage || 10}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'feedStage', parseInt(e.target.value))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="property-group">
+                                            <h4>Operating Conditions</h4>
+                                            <div className="property-row">
+                                                <span className="property-label">Distillate (kmol/h):</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={selectedNode.data.parameters.distillateRate || 50}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'distillateRate', parseFloat(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="property-row">
+                                                <span className="property-label">Pressure (Pa):</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    value={selectedNode.data.parameters.pressure || 101325}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'pressure', parseInt(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="property-row">
+                                                <span className="property-label">Tray Efficiency:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.1"
+                                                    max="1.0"
+                                                    value={selectedNode.data.parameters.trayEfficiency || 0.75}
+                                                    onChange={(e) => updateNodeParameter(selectedNode.id, 'trayEfficiency', parseFloat(e.target.value))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="property-group">
+                                            <h4>Feed Composition</h4>
+                                            <div className="property-row">
+                                                <span className="property-label">Benzene:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    max="1"
+                                                    value={selectedNode.data.parameters.feed_benzene || 0.6}
+                                                    onChange={(e) => {
+                                                        const benzene = parseFloat(e.target.value);
+                                                        updateNodeParameter(selectedNode.id, 'feed_benzene', benzene);
+                                                        updateNodeParameter(selectedNode.id, 'feed_toluene', 1 - benzene);
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="property-row">
+                                                <span className="property-label">Toluene:</span>
+                                                <input 
+                                                    className="property-input"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    max="1"
+                                                    value={selectedNode.data.parameters.feed_toluene || 0.4}
+                                                    onChange={(e) => {
+                                                        const toluene = parseFloat(e.target.value);
+                                                        updateNodeParameter(selectedNode.id, 'feed_toluene', toluene);
+                                                        updateNodeParameter(selectedNode.id, 'feed_benzene', 1 - toluene);
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="property-group">
+                                        <h4>Basic Properties</h4>
+                                        <p style={{ fontSize: '12px', color: '#64748b' }}>
+                                            Select a distillation column for detailed configuration options.
+                                        </p>
+                                        <div className="property-row">
+                                            <span className="property-label">Unit Name:</span>
+                                            <input 
+                                                className="property-input"
+                                                style={{ width: '120px' }}
+                                                type="text"
+                                                value={selectedNode.data.name || ''}
+                                                onChange={(e) => {
+                                                    setNodes(nodes => 
+                                                        nodes.map(node => 
+                                                            node.id === selectedNode.id 
+                                                                ? { ...node, data: { ...node.data, name: e.target.value } }
+                                                                : node
+                                                        )
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )
+                            ) : (
+                                <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 20px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+                                    <p>Click on a unit operation to configure its properties</p>
+                                    <p style={{ fontSize: '12px', marginTop: '8px' }}>
+                                        Drag units from the left panel to create your process flowsheet
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the application
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ProcessFlowsheetApp />);
+    </script>
+</body>
+</html>
