@@ -373,11 +373,120 @@
         .message {
             margin-bottom: 15px;
             animation: slideIn 0.3s ease-out;
+            position: relative;
         }
 
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-feedback {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            align-items: center;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .message-feedback:hover {
+            opacity: 1;
+        }
+
+        .feedback-btn {
+            background: none;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 11px;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .feedback-btn:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .feedback-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .feedback-btn.thumbs-up:hover, .feedback-btn.thumbs-up.active {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
+        .feedback-btn.thumbs-down:hover, .feedback-btn.thumbs-down.active {
+            background: #ef4444;
+            border-color: #ef4444;
+        }
+
+        .detailed-feedback {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 3px solid #3b82f6;
+            display: none;
+        }
+
+        .detailed-feedback.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .feedback-input {
+            width: 100%;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            margin-bottom: 8px;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .feedback-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .tag-btn {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tag-btn:hover, .tag-btn.selected {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .submit-feedback-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .submit-feedback-btn:hover {
+            background: #059669;
         }
 
         .message.user {
@@ -796,6 +905,8 @@
         let isSimulating = false;
         let isAIThinking = false;
         let chatHistory = [];
+        let conversationId = null;
+        let messageTurns = {}; // Store turn_id for each message
 
         // AI Configuration
         const AI_CONFIG = {
@@ -925,6 +1036,7 @@
                     body: JSON.stringify({
                         message: message,
                         flowsheet_id: flowsheetId,
+                        conversation_id: conversationId,
                         context: {
                             current_units: units.length,
                             unit_types: units.map(u => u.type),
@@ -940,20 +1052,38 @@
 
                 const aiResponse = await response.json();
                 
+                // Store conversation and turn IDs
+                if (aiResponse.conversation_id) {
+                    conversationId = aiResponse.conversation_id;
+                }
+                
                 // Execute AI actions if any
                 if (aiResponse.action_results && aiResponse.action_results.length > 0) {
                     await executeAIActions(aiResponse.action_results);
                 }
                 
-                // Add AI response to chat
-                addMessageToChat('assistant', aiResponse.response);
+                // Add AI response to chat with feedback capability
+                const messageId = addMessageToChat('assistant', aiResponse.response, {
+                    turn_id: aiResponse.turn_id,
+                    conversation_id: aiResponse.conversation_id,
+                    confidence: aiResponse.confidence,
+                    model: aiResponse.model
+                });
+                
+                // Store turn ID for feedback
+                if (aiResponse.turn_id) {
+                    messageTurns[messageId] = {
+                        turn_id: aiResponse.turn_id,
+                        conversation_id: aiResponse.conversation_id
+                    };
+                }
                 
                 // Add suggested follow-ups as quick actions
                 if (aiResponse.suggested_followups) {
                     addFollowupSuggestions(aiResponse.suggested_followups);
                 }
                 
-                updateChatStatus(`Online (${aiResponse.confidence * 100}% confident)`);
+                updateChatStatus(`Online (${Math.round(aiResponse.confidence * 100)}% confident)`);
                 
             } catch (error) {
                 console.error('AI processing error:', error);
@@ -1326,9 +1456,11 @@ Try asking me to "design a separation process" or "optimize my current flowsheet
             }
         }
 
-        function addMessageToChat(sender, message) {
+        function addMessageToChat(sender, message, metadata = {}) {
             const chatMessages = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
+            const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            messageDiv.id = messageId;
             messageDiv.className = `message ${sender}`;
             
             const now = new Date();
@@ -1338,15 +1470,43 @@ Try asking me to "design a separation process" or "optimize my current flowsheet
                 minute: '2-digit' 
             });
             
+            let feedbackHTML = '';
+            if (sender === 'assistant' && metadata.turn_id) {
+                feedbackHTML = `
+                    <div class="message-feedback">
+                        <button class="feedback-btn thumbs-up" onclick="submitFeedback('${messageId}', 'thumbs_up', 5)">👍</button>
+                        <button class="feedback-btn thumbs-down" onclick="submitFeedback('${messageId}', 'thumbs_down', 2)">👎</button>
+                        <button class="feedback-btn" onclick="showDetailedFeedback('${messageId}')">📝 Detail</button>
+                        <span style="font-size: 10px; color: #9ca3af;">
+                            ${Math.round(metadata.confidence * 100)}% confident • ${metadata.model}
+                        </span>
+                    </div>
+                    <div class="detailed-feedback" id="feedback_${messageId}">
+                        <div class="feedback-tags">
+                            <button class="tag-btn" data-tag="accuracy">Accuracy</button>
+                            <button class="tag-btn" data-tag="helpfulness">Helpfulness</button>
+                            <button class="tag-btn" data-tag="completeness">Completeness</button>
+                            <button class="tag-btn" data-tag="clarity">Clarity</button>
+                            <button class="tag-btn" data-tag="engineering">Engineering Quality</button>
+                        </div>
+                        <textarea class="feedback-input" placeholder="What could be improved? (optional)"></textarea>
+                        <textarea class="feedback-input" placeholder="What should the AI have said instead? (correction)"></textarea>
+                        <button class="submit-feedback-btn" onclick="submitDetailedFeedback('${messageId}')">Submit Feedback</button>
+                    </div>
+                `;
+            }
+            
             messageDiv.innerHTML = `
                 <div class="message-bubble">${message}</div>
                 <div class="message-time">${time}</div>
+                ${feedbackHTML}
             `;
             
             chatMessages.appendChild(messageDiv);
             scrollChatToBottom();
             
-            chatHistory.push({ sender, message, timestamp: now });
+            chatHistory.push({ sender, message, timestamp: now, metadata });
+            return messageId;
         }
 
         function showThinkingIndicator() {
@@ -1381,6 +1541,108 @@ Try asking me to "design a separation process" or "optimize my current flowsheet
 
         function updateChatStatus(status) {
             document.getElementById('chatStatus').textContent = status;
+        }
+
+        // Feedback submission functions
+        async function submitFeedback(messageId, feedbackType, rating) {
+            const turnData = messageTurns[messageId];
+            if (!turnData) {
+                console.error('No turn data found for message:', messageId);
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        turn_id: turnData.turn_id,
+                        conversation_id: turnData.conversation_id,
+                        feedback_type: feedbackType,
+                        rating: rating,
+                        outcome: rating >= 4 ? 'success' : 'partial_success'
+                    })
+                });
+
+                if (response.ok) {
+                    // Update button to show feedback submitted
+                    const messageElement = document.getElementById(messageId);
+                    const feedbackBtn = messageElement.querySelector(`.feedback-btn.${feedbackType.replace('_', '-')}`);
+                    if (feedbackBtn) {
+                        feedbackBtn.classList.add('active');
+                        feedbackBtn.innerHTML = feedbackType === 'thumbs_up' ? '👍 Thanks!' : '👎 Noted';
+                    }
+                    
+                    updateStatus('Feedback submitted - helping improve AI performance');
+                } else {
+                    console.error('Failed to submit feedback:', response.status);
+                }
+            } catch (error) {
+                console.error('Feedback submission error:', error);
+            }
+        }
+
+        function showDetailedFeedback(messageId) {
+            const feedbackDiv = document.getElementById(`feedback_${messageId}`);
+            if (feedbackDiv) {
+                feedbackDiv.classList.toggle('show');
+                
+                // Add click handlers for tags
+                const tagButtons = feedbackDiv.querySelectorAll('.tag-btn');
+                tagButtons.forEach(btn => {
+                    btn.onclick = function() {
+                        this.classList.toggle('selected');
+                    };
+                });
+            }
+        }
+
+        async function submitDetailedFeedback(messageId) {
+            const turnData = messageTurns[messageId];
+            if (!turnData) {
+                console.error('No turn data found for message:', messageId);
+                return;
+            }
+
+            const feedbackDiv = document.getElementById(`feedback_${messageId}`);
+            const textInputs = feedbackDiv.querySelectorAll('.feedback-input');
+            const selectedTags = feedbackDiv.querySelectorAll('.tag-btn.selected');
+            
+            const textFeedback = textInputs[0].value.trim();
+            const correction = textInputs[1].value.trim();
+            const tags = Array.from(selectedTags).map(btn => btn.dataset.tag);
+
+            try {
+                const response = await fetch('http://localhost:8000/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        turn_id: turnData.turn_id,
+                        conversation_id: turnData.conversation_id,
+                        feedback_type: 'detailed',
+                        rating: correction ? 2 : 3, // Lower rating if correction provided
+                        text_feedback: textFeedback || null,
+                        correction: correction || null,
+                        tags: tags.length > 0 ? tags : null,
+                        outcome: correction ? 'failure' : 'partial_success'
+                    })
+                });
+
+                if (response.ok) {
+                    // Hide feedback form and show thank you
+                    feedbackDiv.innerHTML = '<p style="color: #10b981; font-size: 11px; text-align: center; padding: 10px;">✅ Thank you for your detailed feedback! This helps improve our AI.</p>';
+                    
+                    updateStatus('Detailed feedback submitted for AI training');
+                } else {
+                    console.error('Failed to submit detailed feedback:', response.status);
+                }
+            } catch (error) {
+                console.error('Detailed feedback submission error:', error);
+            }
         }
 
         // Unit management functions (simplified versions)

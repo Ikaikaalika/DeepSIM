@@ -9,6 +9,7 @@ import logging
 import traceback
 from datetime import datetime
 import uuid
+import os
 
 from graph_state import GraphStateManager, FlowsheetState
 from idaes_engine import IDaESEngine
@@ -16,16 +17,36 @@ from llm_client import LLMClient
 from unit_operations import RigorousDistillationColumn, DistillationColumnDesign
 from thermodynamics import PropertyEngine
 from ai_engine import ProcessEngineeringAI, AIRequest, AITaskType, create_ai_engine
+from feedback_system import FeedbackCollector, FeedbackType, InteractionOutcome, feedback_collector
+from mcp_client import DeepSimMCPClient, MCPProcessEngineeringAI, create_mcp_ai_engine
+
+# SaaS Components
+from auth import User, Tenant, get_current_user, get_current_tenant, require_permission, require_role, Permission, Role
+from auth_routes import router as auth_router
+from database import db_manager, get_db_session, get_tenant_db_session
+from middleware import (
+    TenantContextMiddleware,
+    SecurityHeadersMiddleware, 
+    RateLimitMiddleware,
+    RequestLoggingMiddleware
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="DeepSim API",
-    description="AI-powered chemical process simulation platform",
-    version="1.0.0"
+    title="DeepSim SaaS API",
+    description="AI-powered chemical process simulation platform with multi-tenant SaaS capabilities",
+    version="2.0.0"
 )
 
+# Add SaaS middleware stack
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(TenantContextMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
+
+# CORS is now handled by custom middleware, but keeping this for compatibility
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -33,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include authentication routes
+app.include_router(auth_router)
 
 # Global exception handlers
 @app.exception_handler(ValueError)
@@ -67,12 +91,25 @@ distillation_designer = DistillationColumnDesign()
 
 # AI Engine - Will be initialized on startup
 ai_engine: Optional[ProcessEngineeringAI] = None
+mcp_client: Optional[DeepSimMCPClient] = None
+use_mcp: bool = True  # Toggle between MCP and direct API
 
 class AIMessage(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     flowsheet_id: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     conversation_history: Optional[List[Dict[str, Any]]] = None
+    conversation_id: Optional[str] = None
+
+class FeedbackRequest(BaseModel):
+    turn_id: str = Field(..., min_length=1)
+    conversation_id: str = Field(..., min_length=1)
+    feedback_type: str = Field(..., min_length=1)
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    text_feedback: Optional[str] = Field(None, max_length=2000)
+    correction: Optional[str] = Field(None, max_length=5000)
+    tags: Optional[List[str]] = None
+    outcome: Optional[str] = None
 
 class SimulationRequest(BaseModel):
     flowsheet_id: str = Field(..., min_length=1, description="Valid flowsheet ID")
@@ -171,56 +208,135 @@ class FlowsheetUpdate(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "DeepSim API Server", "version": "1.0.0"}
+    return {
+        "message": "DeepSim SaaS API Server", 
+        "version": "2.0.0",
+        "features": ["multi-tenant", "authentication", "rate-limiting", "mcp-integration"]
+    }
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize AI engine on startup"""
-    global ai_engine
+    """Initialize database, AI engine, and all SaaS components"""
+    global ai_engine, mcp_client, use_mcp
+    
     try:
-        thunder_api_key = os.getenv("THUNDER_API_KEY")
-        if thunder_api_key:
-            ai_engine = await create_ai_engine(thunder_api_key)
-            logger.info("AI Engine initialized successfully with Thunder Compute")
-        else:
-            logger.warning("THUNDER_API_KEY not found. AI features will use fallback mode.")
+        # Initialize database first
+        logger.info("Initializing database...")
+        await db_manager.initialize()
+        
+        # Initialize AI engine
+        if use_mcp:
+            # Try to initialize MCP-based AI engine
+            try:
+                ai_engine = await create_mcp_ai_engine()
+                logger.info("MCP AI Engine initialized successfully")
+            except Exception as mcp_error:
+                logger.warning(f"MCP initialization failed: {mcp_error}")
+                logger.info("Falling back to direct Thunder Compute API...")
+                use_mcp = False
+        
+        if not use_mcp:
+            # Fallback to direct Thunder Compute API
+            thunder_api_key = os.getenv("THUNDER_API_KEY")
+            if thunder_api_key:
+                ai_engine = await create_ai_engine(thunder_api_key)
+                logger.info("Direct API AI Engine initialized successfully with Thunder Compute")
+            else:
+                logger.warning("THUNDER_API_KEY not found. AI features will use basic fallback mode.")
+                
     except Exception as e:
         logger.error(f"Failed to initialize AI engine: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup AI engine on shutdown"""
-    global ai_engine
+    """Cleanup AI engine, database, and all SaaS components"""
+    global ai_engine, mcp_client
+    
     if ai_engine:
-        await ai_engine.shutdown()
+        if hasattr(ai_engine, 'shutdown'):
+            await ai_engine.shutdown()
         logger.info("AI Engine shut down successfully")
+    
+    if mcp_client:
+        await mcp_client.disconnect()
+        logger.info("MCP Client disconnected successfully")
+    
+    # Close database connections
+    await db_manager.close()
+    logger.info("Database connections closed")
 
 @app.get("/health")
 async def health_check():
     ai_status = "online" if ai_engine else "offline"
+    protocol = "MCP" if use_mcp else "HTTP API"
+    
+    # Check database connection
+    db_status = "online"
+    try:
+        async with db_manager.get_session() as session:
+            await session.execute("SELECT 1")
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "offline"
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
+        "saas_version": "2.0.0",
         "services": {
+            "database": db_status,
+            "authentication": "online",
+            "multi_tenancy": "online",
+            "rate_limiting": "online",
+            "security_headers": "online",
             "graph_manager": "online",
             "simulation_engine": "online", 
             "llm_client": "online",
             "ai_engine": ai_status,
+            "ai_protocol": protocol,
+            "mcp_server": "online" if use_mcp and ai_engine else "offline",
             "thunder_compute": "online" if ai_engine else "offline"
+        },
+        "features": {
+            "tenant_isolation": True,
+            "jwt_authentication": True,
+            "rbac": True,
+            "api_rate_limiting": True,
+            "security_headers": True,
+            "request_logging": True
         }
     }
 
 @app.post("/flowsheet")
-async def create_flowsheet(request: FlowsheetCreateRequest):
+async def create_flowsheet(
+    request: FlowsheetCreateRequest,
+    current_user: User = Depends(require_permission(Permission.CREATE_FLOWSHEETS)),
+    current_tenant: Tenant = Depends(get_current_tenant)
+):
     try:
-        flowsheet_id = graph_manager.create_flowsheet(request.name, request.description)
+        # Create flowsheet in database with tenant isolation
+        flowsheet_id = await db_manager.create_flowsheet(
+            tenant_id=current_tenant.id,
+            user_id=current_user.id,
+            name=request.name,
+            description=request.description,
+            data={"units": [], "streams": [], "connections": []}
+        )
+        
+        # Also create in graph manager for backward compatibility
+        graph_flowsheet_id = graph_manager.create_flowsheet(request.name, request.description)
+        
         return {"flowsheet_id": flowsheet_id, "message": "Flowsheet created successfully"}
     except Exception as e:
         logger.error(f"Error creating flowsheet: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/flowsheet/{flowsheet_id}")
-async def get_flowsheet(flowsheet_id: str):
+async def get_flowsheet(
+    flowsheet_id: str,
+    current_user: User = Depends(require_permission(Permission.VIEW_FLOWSHEETS)),
+    current_tenant: Tenant = Depends(get_current_tenant)
+):
     try:
         flowsheet = graph_manager.get_flowsheet(flowsheet_id)
         if not flowsheet:
@@ -427,7 +543,11 @@ async def simulate_with_distillation(flowsheet: Dict[str, Any]) -> Dict[str, Any
 
 @app.post("/ai/chat")
 async def chat_with_ai(request: AIMessage):
-    """Enhanced AI chat using DeepSeek R1 on Thunder Compute"""
+    """Enhanced AI chat using DeepSeek R1 on Thunder Compute with comprehensive logging"""
+    start_time = datetime.now()
+    conversation_id = request.conversation_id or str(uuid.uuid4())
+    turn_id = None
+    
     try:
         if not ai_engine:
             # Fallback to basic LLM client if AI engine not available
@@ -440,6 +560,23 @@ async def chat_with_ai(request: AIMessage):
                 flowsheet=flowsheet,
                 context=request.context
             )
+            
+            # Log fallback interaction
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
+            turn_id = await feedback_collector.log_conversation_turn(
+                conversation_id=conversation_id,
+                user_message=request.message,
+                ai_response=response.get("response", ""),
+                task_type="fallback",
+                confidence=0.5,
+                actions_taken=[],
+                context=request.context or {},
+                execution_time=execution_time,
+                model_used="fallback_llm"
+            )
+            
+            response["turn_id"] = turn_id
+            response["conversation_id"] = conversation_id
             return response
         
         # Use AI engine with DeepSeek R1
@@ -469,7 +606,26 @@ async def chat_with_ai(request: AIMessage):
                 result = await execute_ai_action(action, request.flowsheet_id)
                 action_results.append(result)
         
+        # Calculate execution time
+        execution_time = (datetime.now() - start_time).total_seconds() * 1000
+        
+        # Log the interaction for training
+        turn_id = await feedback_collector.log_conversation_turn(
+            conversation_id=conversation_id,
+            user_message=request.message,
+            ai_response=ai_response.message,
+            task_type=task_type.value,
+            confidence=ai_response.confidence,
+            actions_taken=ai_response.actions,
+            context=request.context or {},
+            execution_time=execution_time,
+            model_used="deepseek-r1-distill-llama-70b",
+            tokens_used=None  # Could be extracted from Thunder Compute response
+        )
+        
         return {
+            "turn_id": turn_id,
+            "conversation_id": conversation_id,
             "response": ai_response.message,
             "actions": ai_response.actions,
             "action_results": action_results,
@@ -478,11 +634,28 @@ async def chat_with_ai(request: AIMessage):
             "suggested_followups": ai_response.suggested_followups,
             "task_type": task_type.value,
             "model": "deepseek-r1-distill-llama-70b",
+            "execution_time": execution_time,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
         logger.error(f"AI processing error: {e}")
+        
+        # Log failed interaction
+        execution_time = (datetime.now() - start_time).total_seconds() * 1000
+        if turn_id is None:
+            turn_id = await feedback_collector.log_conversation_turn(
+                conversation_id=conversation_id,
+                user_message=request.message,
+                ai_response=f"Error: {str(e)}",
+                task_type="error",
+                confidence=0.0,
+                actions_taken=[],
+                context=request.context or {},
+                execution_time=execution_time,
+                model_used="error"
+            )
+        
         raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
 
 async def execute_ai_action(action: Dict[str, Any], flowsheet_id: str) -> Dict[str, Any]:
@@ -575,6 +748,134 @@ async def chat_with_llm(request: LLMRequest):
         context=request.context
     )
     return await chat_with_ai(ai_message)
+
+@app.post("/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """Submit user feedback on AI interactions for training improvement"""
+    try:
+        # Convert string enums to proper enum types
+        feedback_type = FeedbackType(request.feedback_type.lower())
+        outcome = InteractionOutcome(request.outcome.lower()) if request.outcome else None
+        
+        await feedback_collector.collect_feedback(
+            turn_id=request.turn_id,
+            conversation_id=request.conversation_id,
+            feedback_type=feedback_type,
+            rating=request.rating,
+            text_feedback=request.text_feedback,
+            correction=request.correction,
+            tags=request.tags,
+            outcome=outcome
+        )
+        
+        return {
+            "message": "Feedback submitted successfully",
+            "turn_id": request.turn_id,
+            "feedback_type": request.feedback_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Feedback submission error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
+
+@app.get("/analytics/feedback")
+async def get_feedback_analytics():
+    """Get analytics on AI performance and user feedback"""
+    try:
+        analytics = await feedback_collector.get_analytics()
+        return analytics
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}")
+
+@app.post("/training/export")
+async def export_training_data(
+    format_type: str = "openai",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    min_rating: int = 3
+):
+    """Export training data for LLM fine-tuning"""
+    try:
+        file_path = await feedback_collector.export_training_data(
+            format_type=format_type,
+            start_date=start_date,
+            end_date=end_date,
+            min_rating=min_rating
+        )
+        
+        return {
+            "message": "Training data exported successfully",
+            "file_path": file_path,
+            "format": format_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Training export error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to export training data: {str(e)}")
+
+@app.get("/mcp/tools")
+async def list_mcp_tools():
+    """List available MCP tools"""
+    if not use_mcp or not hasattr(ai_engine, 'mcp_client'):
+        raise HTTPException(status_code=503, detail="MCP not available")
+    
+    try:
+        mcp_client = ai_engine.mcp_client
+        tools_result = await mcp_client.session.list_tools()
+        
+        tools = []
+        for tool in tools_result.tools:
+            tools.append({
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.inputSchema
+            })
+        
+        return {"tools": tools, "count": len(tools)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list MCP tools: {str(e)}")
+
+@app.get("/mcp/resources")
+async def list_mcp_resources():
+    """List available MCP resources"""
+    if not use_mcp or not hasattr(ai_engine, 'mcp_client'):
+        raise HTTPException(status_code=503, detail="MCP not available")
+    
+    try:
+        mcp_client = ai_engine.mcp_client
+        resources_result = await mcp_client.session.list_resources()
+        
+        resources = []
+        for resource in resources_result.resources:
+            resources.append({
+                "uri": resource.uri,
+                "name": resource.name,
+                "description": resource.description
+            })
+        
+        return {"resources": resources, "count": len(resources)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list MCP resources: {str(e)}")
+
+@app.get("/mcp/context/{conversation_id}")
+async def get_mcp_context(conversation_id: str):
+    """Get MCP conversation context"""
+    if not use_mcp or not hasattr(ai_engine, 'mcp_client'):
+        raise HTTPException(status_code=503, detail="MCP not available")
+    
+    try:
+        # This would be implemented based on the MCP server's resource management
+        return {
+            "conversation_id": conversation_id,
+            "context_available": True,
+            "message": "MCP context management active"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get MCP context: {str(e)}")
 
 @app.post("/export/{flowsheet_id}")
 async def export_flowsheet(flowsheet_id: str, format: str = "json"):

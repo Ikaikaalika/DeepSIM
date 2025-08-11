@@ -1,0 +1,38 @@
+# DeepSim SaaS Additional Dependencies
+# Authentication and Security
+PyJWT==2.8.0
+bcrypt==4.1.2
+cryptography==41.0.8
+
+# Database
+asyncpg==0.29.0
+SQLAlchemy[asyncio]==2.0.23
+alembic==1.13.1
+
+# Redis for caching and rate limiting
+redis==5.0.1
+aioredis==2.0.1
+
+# Email services
+python-multipart==0.0.6
+email-validator==2.1.0
+
+# Additional security
+python-jose[cryptography]==3.3.0
+
+# Monitoring and logging
+structlog==23.2.0
+sentry-sdk[fastapi]==1.40.0
+
+# Background tasks
+celery==5.3.4
+
+# Rate limiting
+slowapi==0.1.9
+
+# Testing
+pytest-asyncio==0.23.2
+httpx==0.25.2
+
+# Production server
+gunicorn==21.2.0
